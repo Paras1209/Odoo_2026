@@ -9,7 +9,6 @@ import {
   Paper,
   InputAdornment,
   IconButton,
-  MenuItem,
   Link as MuiLink,
   FormControlLabel,
   Checkbox,
@@ -25,21 +24,11 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../contexts/AuthContext';
-import type { UserRole } from '../types/auth';
-
-const roles: { value: UserRole; label: string }[] = [
-  { value: 'employee', label: 'Employee' },
-  { value: 'fleet_manager', label: 'Fleet Manager' },
-  { value: 'driver', label: 'Driver' },
-  { value: 'safety_officer', label: 'Safety Officer' },
-  { value: 'financial_analyst', label: 'Financial Analyst' },
-];
 
 const registerSchema = z
   .object({
     name: z.string().min(2, 'Name must be at least 2 characters').max(100),
     email: z.string().min(1, 'Email is required').email('Enter a valid email'),
-    role: z.string().min(1, 'Select a role'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     confirmPassword: z.string().min(1, 'Confirm your password'),
     acceptTerms: z.literal(true, {
@@ -69,7 +58,6 @@ export default function Register() {
     defaultValues: {
       name: '',
       email: '',
-      role: 'employee',
       password: '',
       confirmPassword: '',
       acceptTerms: false as unknown as true,
@@ -83,7 +71,6 @@ export default function Register() {
         name: values.name,
         email: values.email,
         password: values.password,
-        role: values.role as UserRole,
       });
       navigate('/profile', { replace: true });
     } catch {
@@ -131,7 +118,7 @@ export default function Register() {
             Smart Transport Operations Platform
           </Typography>
           <Typography variant="body2" sx={{ mt: 5, opacity: 0.55, textAlign: 'center', maxWidth: 200 }}>
-            Create your account to get started with role-based fleet management.
+            Create your account. An administrator will assign your role and approve access.
           </Typography>
         </Box>
 
@@ -179,23 +166,6 @@ export default function Register() {
               helperText={errors.email?.message}
               {...register('email')}
             />
-
-            <TextField
-              fullWidth
-              label="Role"
-              select
-              margin="dense"
-              defaultValue="employee"
-              error={!!errors.role}
-              helperText={errors.role?.message}
-              {...register('role')}
-            >
-              {roles.map((opt) => (
-                <MenuItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </MenuItem>
-              ))}
-            </TextField>
 
             <TextField
               fullWidth

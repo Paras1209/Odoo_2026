@@ -10,7 +10,7 @@ const { generateToken } = require('../utils/authUtils');
 // @route   POST /api/v1/auth/register
 // @access  Public
 const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { name, email, password } = req.body;
 
   // Simple validation
   if (!name || !email || !password) {
@@ -26,20 +26,21 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new Error('User already exists');
   }
 
-  const roleCode = role || 'employee';
-  const userRole = await Role.findOne({ where: { code: roleCode } });
+  // Always assign 'employee' role on registration - admin will assign proper role later
+  const userRole = await Role.findOne({ where: { code: 'employee' } });
 
   if (!userRole) {
     res.status(400);
-    throw new Error(`Invalid role: ${roleCode}`);
+    throw new Error('System error: Default role not found');
   }
 
-  // Create user
+  // Create user with 'pending' status - admin approval required
   const user = await User.create({
     name,
     email,
     password,
-    roleId: userRole.id
+    roleId: userRole.id,
+    status: 'pending'
   });
 
   if (user) {
@@ -50,8 +51,10 @@ const registerUser = asyncHandler(async (req, res) => {
         name: user.name,
         email: user.email,
         role: userRole.code,
+        status: user.status,
         token: generateToken(user.id)
-      }
+      },
+      message: 'Registration successful. Your account is pending admin approval.'
     });
   } else {
     res.status(400);

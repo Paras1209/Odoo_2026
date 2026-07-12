@@ -32,26 +32,20 @@ const User = sequelize.define('User', {
       len: [6, 255]
     }
   },
-  role: {
-    type: DataTypes.ENUM(
-      'admin',
-      'fleet_manager',
-      'driver',
-      'safety_officer',
-      'financial_analyst'
-    ),
-    allowNull: false,
+  roleId: {
+    type: DataTypes.UUID,
+    allowNull: true,
     references: {
       model: 'roles',
       key: 'id'
     },
     onUpdate: 'CASCADE',
-    onDelete: 'RESTRICT'
+    onDelete: 'SET NULL'
   },
   status: {
-    type: DataTypes.ENUM('active', 'inactive', 'suspended'),
+    type: DataTypes.ENUM('active', 'inactive', 'suspended', 'pending'),
     allowNull: false,
-    defaultValue: 'active'
+    defaultValue: 'pending'
   },
   lastLoginAt: {
     type: DataTypes.DATE,
