@@ -12,6 +12,11 @@ export interface Vehicle {
   status: 'Available' | 'On Trip' | 'In Shop' | 'Retired';
   createdAt: string;
   updatedAt: string;
+  operationalCost?: {
+    fuelCost: number;
+    maintenanceCost: number;
+    operationalCost: number;
+  };
 }
 
 const vehicleService = {

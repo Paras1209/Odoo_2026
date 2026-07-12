@@ -17,7 +17,7 @@ interface RoleAccessConfig {
 const ROLE_ACCESS: RoleAccessConfig = {
   dashboard: ['dispatcher', 'admin'],
   trips: ['dispatcher', 'fleet_manager', 'driver', 'admin'],
-  fleet: ['fleet_manager', 'admin'],
+  fleet: ['fleet_manager', 'dispatcher', 'safety_officer', 'admin'],
   drivers: ['fleet_manager', 'safety_officer', 'dispatcher', 'admin'],
   maintenance: ['fleet_manager', 'admin'],
   compliance: ['safety_officer', 'admin'],

@@ -16,6 +16,12 @@ import TripList from './pages/trips/TripList';
 import TripForm from './components/trips/TripForm';
 import TripDetail from './pages/trips/TripDetail';
 import UserManagement from './pages/admin/UserManagement';
+import VehicleList from './pages/fleet/VehicleList';
+import VehicleForm from './components/fleet/VehicleForm';
+import VehicleDetail from './pages/fleet/VehicleDetail';
+import DriverList from './pages/drivers/DriverList';
+import DriverForm from './components/drivers/DriverForm';
+import DriverDetail from './pages/drivers/DriverDetail';
 
 // Layout
 import Sidebar from './components/Sidebar';
@@ -106,6 +112,74 @@ function AppContent() {
               element={
                 <RequireAuth roles={['dispatcher', 'admin']}>
                   <TripForm />
+                </RequireAuth>
+              }
+            />
+
+            {/* Fleet Management Routes - Accessible by Fleet Manager, Dispatcher, Admin */}
+            <Route
+              path="/fleet"
+              element={
+                <RequireAuth roles={['fleet_manager', 'dispatcher', 'safety_officer', 'admin']}>
+                  <VehicleList />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/fleet/new"
+              element={
+                <RequireAuth roles={['fleet_manager', 'admin']}>
+                  <VehicleForm />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/fleet/:id"
+              element={
+                <RequireAuth roles={['fleet_manager', 'dispatcher', 'safety_officer', 'admin']}>
+                  <VehicleDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/fleet/:id/edit"
+              element={
+                <RequireAuth roles={['fleet_manager', 'admin']}>
+                  <VehicleForm />
+                </RequireAuth>
+              }
+            />
+
+            {/* Driver Management Routes - Accessible by Fleet Manager, Safety Officer, Admin */}
+            <Route
+              path="/drivers"
+              element={
+                <RequireAuth roles={['fleet_manager', 'dispatcher', 'safety_officer', 'admin']}>
+                  <DriverList />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/drivers/new"
+              element={
+                <RequireAuth roles={['fleet_manager', 'admin']}>
+                  <DriverForm />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/drivers/:id"
+              element={
+                <RequireAuth roles={['fleet_manager', 'dispatcher', 'safety_officer', 'admin']}>
+                  <DriverDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/drivers/:id/edit"
+              element={
+                <RequireAuth roles={['fleet_manager', 'admin']}>
+                  <DriverForm />
                 </RequireAuth>
               }
             />
