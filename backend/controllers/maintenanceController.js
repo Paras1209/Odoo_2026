@@ -1,76 +1,42 @@
 const asyncHandler = require('express-async-handler');
 const Maintenance = require('../models/Maintenance');
 const Vehicle = require('../models/Vehicle');
-
-const allowedMaintenanceStatuses = ['scheduled', 'in_progress', 'completed', 'cancelled'];
-
-const parseNumericValue = (value) => {
-  if (value === undefined || value === null || value === '') {
-    return value;
-  }
-
-  const numericValue = Number(value);
-  return Number.isNaN(numericValue) ? value : numericValue;
-};
-
-const validateStringField = (errors, value, fieldName, minLength, maxLength, required) => {
-  const stringValue = String(value || '').trim();
-
-  if (!stringValue) {
-    if (required) {
-      errors.push(`${fieldName} is required`);
-    }
-    return;
-  }
-
-  if (stringValue.length < minLength || stringValue.length > maxLength) {
-    errors.push(`${fieldName} must be between ${minLength} and ${maxLength} characters`);
-  }
-};
-
-const validateNumericField = (errors, value, fieldName, minimum) => {
-  const numericValue = Number(value);
-
-  if (Number.isNaN(numericValue) || numericValue < minimum) {
-    errors.push(`${fieldName} must be a number greater than or equal to ${minimum}`);
-  }
-};
-
-const validateEnumField = (errors, value, fieldName, allowedValues) => {
-  if (!allowedValues.includes(value)) {
-    errors.push(`${fieldName} must be one of: ${allowedValues.join(', ')}`);
-  }
-};
+const {
+  parseNumericValue,
+  validateStringField,
+  validateNumericField,
+  validateEnumField,
+  validateDateField,
+  createUpdateValidator
+} = require('../utils/validation');
+const { ALLOWED_MAINTENANCE_STATUSES } = require('../constants');
 
 const validateMaintenancePayload = (payload, isUpdate = false) => {
   const errors = [];
-  const shouldValidate = (fieldName) => !isUpdate || payload[fieldName] !== undefined;
+  const shouldValidate = createUpdateValidator(isUpdate, payload);
 
   if (shouldValidate('vehicleId')) {
-    validateStringField(errors, payload.vehicleId, 'vehicleId', 1, 100, true);
+    validateStringField(errors, payload.vehicleId, 'vehicleId', 1, 100, !isUpdate);
   }
 
   if (shouldValidate('type')) {
-    validateStringField(errors, payload.type, 'type', 2, 120, true);
+    validateStringField(errors, payload.type, 'type', 2, 120, !isUpdate);
   }
 
   if (shouldValidate('description')) {
-    validateStringField(errors, payload.description, 'description', 1, 10000, true);
+    validateStringField(errors, payload.description, 'description', 1, 10000, !isUpdate);
   }
 
-  if (shouldValidate('cost')) {
+  if (shouldValidate('cost') && payload.cost !== undefined) {
     validateNumericField(errors, payload.cost, 'cost', 0);
   }
 
-  if (shouldValidate('date')) {
-    const maintenanceDate = new Date(payload.date);
-    if (Number.isNaN(maintenanceDate.getTime())) {
-      errors.push('date must be a valid date');
-    }
+  if (shouldValidate('date') && payload.date) {
+    validateDateField(errors, payload.date, 'date', !isUpdate);
   }
 
-  if (shouldValidate('status')) {
-    validateEnumField(errors, payload.status, 'status', allowedMaintenanceStatuses);
+  if (shouldValidate('status') && payload.status) {
+    validateEnumField(errors, payload.status, 'status', ALLOWED_MAINTENANCE_STATUSES);
   }
 
   return errors;

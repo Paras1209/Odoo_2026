@@ -10,30 +10,25 @@ const {
 } = require('../controllers/vehicleController');
 const { protect, authorize } = require('../middleware/auth');
 
-router.get('/', protect, authorize('admin', 'fleet_manager', 'safety_officer'), getVehicles);
-router.get('/:id', protect, authorize('admin', 'fleet_manager', 'safety_officer'), getVehicle);
-router.get('/:id/operational-cost', protect, authorize('admin', 'fleet_manager', 'financial_analyst'), getVehicleOperationalCost);
-router.post('/', protect, authorize('admin', 'fleet_manager'), createVehicle);
-router.put('/:id', protect, authorize('admin', 'fleet_manager'), updateVehicle);
-router.delete('/:id', protect, authorize('admin', 'fleet_manager'), deleteVehicle);
-
-module.exports = router;
 // All routes are protected
 router.use(protect);
 
 // GET all vehicles
-router.get('/', getVehicles);
+router.get('/', authorize('admin', 'fleet_manager', 'dispatcher', 'safety_officer'), getVehicles);
 
 // GET single vehicle
-router.get('/:id', getVehicle);
+router.get('/:id', authorize('admin', 'fleet_manager', 'dispatcher', 'safety_officer'), getVehicle);
 
-// POST create new vehicle (admin only)
+// GET vehicle operational cost
+router.get('/:id/operational-cost', authorize('admin', 'fleet_manager', 'financial_analyst'), getVehicleOperationalCost);
+
+// POST create new vehicle
 router.post('/', authorize('admin', 'fleet_manager'), createVehicle);
 
-// PUT update vehicle (admin only)
+// PUT update vehicle
 router.put('/:id', authorize('admin', 'fleet_manager'), updateVehicle);
 
-// DELETE vehicle (admin only)
+// DELETE vehicle
 router.delete('/:id', authorize('admin', 'fleet_manager'), deleteVehicle);
 
 module.exports = router;
