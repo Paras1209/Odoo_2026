@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const Expense = require('../models/Expense');
 const Vehicle = require('../models/Vehicle');
+const Trip = require('../models/Trip');
 
 const allowedExpenseTypes = ['fuel', 'toll', 'maintenance', 'other'];
 
@@ -90,6 +91,28 @@ const normalizeExpensePayload = (payload) => ({
   receiptUrl: payload.receiptUrl?.trim() || null
 });
 
+const findTripForVehicle = async (tripId, vehicleId) => {
+  if (!tripId) {
+    return null;
+  }
+
+  const trip = await Trip.findByPk(tripId);
+
+  if (!trip) {
+    const error = new Error('Trip not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (trip.vehicleId !== vehicleId) {
+    const error = new Error('Trip must belong to the selected vehicle');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return trip;
+};
+
 const createExpense = asyncHandler(async (req, res) => {
   const errors = validateExpensePayload(req.body);
 
@@ -104,6 +127,8 @@ const createExpense = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Vehicle not found');
   }
+
+  await findTripForVehicle(req.body.tripId?.trim(), vehicle.id);
 
   const expense = await Expense.create(normalizeExpensePayload(req.body));
 
@@ -165,6 +190,15 @@ const updateExpense = asyncHandler(async (req, res) => {
       throw new Error('Vehicle not found');
     }
   }
+
+  const targetVehicleId = req.body.vehicleId !== undefined
+    ? req.body.vehicleId.trim()
+    : expense.vehicleId;
+  const targetTripId = req.body.tripId !== undefined
+    ? req.body.tripId?.trim() || null
+    : expense.tripId;
+
+  await findTripForVehicle(targetTripId, targetVehicleId);
 
   updateField('vehicleId', (value) => value.trim());
   updateField('tripId', (value) => value?.trim() || null);

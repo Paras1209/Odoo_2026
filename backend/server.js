@@ -35,6 +35,8 @@ app.use('/api/v1/auth', require('./routes/authRoutes'));
 app.use('/api/v1/vehicles', require('./routes/vehicleRoutes'));
 app.use('/api/v1/drivers', require('./routes/driverRoutes'));
 app.use('/api/v1/maintenance', require('./routes/maintenanceRoutes'));
+app.use('/api/v1/trips', require('./routes/tripRoutes'));
+app.use('/api/v1/expenses', require('./routes/expenseRoutes'));
 
 // 404 handler
 app.use((req, res) => {
@@ -48,7 +50,7 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error('Error:', err);
 
-  const statusCode = err.statusCode || 500;
+  const statusCode = err.statusCode || (res.statusCode >= 400 ? res.statusCode : 500);
   res.status(statusCode).json({
     status: 'error',
     message: process.env.NODE_ENV === 'production'
@@ -75,6 +77,8 @@ const startServer = async () => {
   }
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
 
 module.exports = app;
