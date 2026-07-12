@@ -89,7 +89,8 @@ const loginUser = asyncHandler(async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.roleInfo?.code ?? null,
+        role: user.roleInfo?.code ?? 'employee',
+        status: user.status,
         token: generateToken(user.id)
       }
     });
@@ -111,7 +112,16 @@ const getMe = asyncHandler(async (req, res) => {
   if (user) {
     res.status(200).json({
       success: true,
-      data: user
+      data: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.roleInfo?.code ?? 'employee',
+        status: user.status,
+        lastLoginAt: user.lastLoginAt,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }
     });
   } else {
     res.status(404);
@@ -144,7 +154,7 @@ const updateProfile = asyncHandler(async (req, res) => {
         id: updatedUser.id,
         name: updatedUser.name,
         email: updatedUser.email,
-        role: updatedUser.roleInfo?.code ?? null
+        role: updatedUser.roleInfo?.code ?? 'employee'
       }
     });
   } else {
