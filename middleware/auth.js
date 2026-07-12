@@ -18,7 +18,7 @@ const protect = asyncHandler(async (req, res, next) => {
 
       // Get user from token
       req.user = await User.findByPk(decoded.id, {
-        attributes: { exclude: ['password'] }
+        attributes: { exclude: ['password', 'passwordResetToken', 'passwordResetExpires'] }
       });
 
       if (!req.user) {
@@ -26,8 +26,24 @@ const protect = asyncHandler(async (req, res, next) => {
         throw new Error('User not found');
       }
 
+      // Check if user is active
+      if (req.user.status !== 'active') {
+        res.status(401);
+        throw new Error('User account is deactivated');
+      }
+
       next();
     } catch (error) {
+      if (error.name === 'JsonWebTokenError') {
+        res.status(401);
+        throw new Error('Invalid token');
+      }
+
+      if (error.name === 'TokenExpiredError') {
+        res.status(401);
+        throw new Error('Token expired');
+      }
+
       res.status(401);
       throw new Error('Not authorized, token failed');
     }

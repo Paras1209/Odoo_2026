@@ -47,6 +47,18 @@ const User = sequelize.define('User', {
     type: DataTypes.ENUM('active', 'inactive', 'suspended'),
     allowNull: false,
     defaultValue: 'active'
+  },
+  lastLoginAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  passwordResetToken: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
+  passwordResetExpires: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
 }, {
   timestamps: true,
@@ -61,6 +73,9 @@ const User = sequelize.define('User', {
     },
     {
       fields: ['role']
+    },
+    {
+      fields: ['passwordResetToken']
     }
   ],
   hooks: {
@@ -86,8 +101,31 @@ User.prototype.isValidPassword = async function(password) {
 
 // Instance method to get public profile (without sensitive data)
 User.prototype.getPublicProfile = function() {
-  const { id, name, email, role, status, createdAt, updatedAt } = this;
-  return { id, name, email, role, status, createdAt, updatedAt };
+  const { id, name, email, role, status, lastLoginAt, createdAt, updatedAt } = this;
+  return { id, name, email, role, status, lastLoginAt, createdAt, updatedAt };
+};
+
+// Instance method to update last login
+User.prototype.updateLastLogin = async function() {
+  this.lastLoginAt = new Date();
+  await this.save();
+};
+
+// Static method to find by email
+User.findByEmail = async function(email) {
+  return await this.findOne({ where: { email } });
+};
+
+// Static method to find by reset token
+User.findByResetToken = async function(token) {
+  return await this.findOne({
+    where: {
+      passwordResetToken: token,
+      passwordResetExpires: {
+        [Sequelize.Op.gt]: new Date()
+      }
+    }
+  });
 };
 
 module.exports = User;

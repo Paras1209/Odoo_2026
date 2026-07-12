@@ -23,7 +23,6 @@ const testDatabaseConnection = async () => {
       console.error('   - On Linux: sudo service postgresql start');
       console.error('   - On macOS: brew services start postgresql');
       console.error('   - On Windows: Start PostgreSQL service via Services app');
-      console.error('   - Or use Docker: docker run --name transitops-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=transitops -p 5432:5432 -d postgres:15');
     } else if (error.original && (original.code === '28P01' || original.message.includes('password authentication failed'))) {
       console.error('\n💡 Authentication failed. Check your credentials in .env:');
       console.error('   - DB_USER:', process.env.DB_USER);

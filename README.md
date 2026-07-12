@@ -12,7 +12,6 @@ Backend API for TransitOps - Transport Operations Platform built with Node.js, E
 - [Development](#development)
 - [Testing](#testing)
 - [Deployment](#deployment)
-- [Docker](#docker)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -34,22 +33,20 @@ Backend API for TransitOps - Transport Operations Platform built with Node.js, E
 - **Runtime**: Node.js v20+
 - **Framework**: Express.js
 - **ORM**: Sequelize
-- **Database**: PostgreSQL
+- **Database**: PostgreSQL (v18)
 - **Authentication**: JSON Web Tokens (JWT)
 - **Validation**: Custom validation middleware
 - **Security**: Helmet, CORS, bcrypt
 - **Development**: Nodemon, ESLint, Prettier, Jest
-- **Containerization**: Docker, Docker Compose
 
 ## Getting Started
 
 ### Prerequisites
 - Node.js (v18 or higher)
-- Docker and Docker Compose (for easy PostgreSQL setup)
-  - OR PostgreSQL (v13 or higher) installed directly
+- PostgreSQL (v18)
 - Git
 
-### Option 1: Using Docker Compose (Recommended for Development)
+### Installation
 1. Clone the repository
    ```bash
    git clone <repository-url>
@@ -61,66 +58,52 @@ Backend API for TransitOps - Transport Operations Platform built with Node.js, E
    npm install
    ```
 
-3. Start PostgreSQL using Docker Compose
-   ```bash
-   docker-compose up -d
-   ```
+3. Set up PostgreSQL v18:
+   - Install PostgreSQL 18 from https://www.postgresql.org/download/
+   - Create a database and user:
+     ```bash
+     # Connect to PostgreSQL as postgres user (or a user with creation privileges)
+     psql -U postgres
+     
+     # Inside psql:
+     CREATE DATABASE transitops;
+     CREATE USER your_username WITH PASSWORD 'your_password';
+     GRANT ALL PRIVILEGES ON DATABASE transitops TO your_username;
+     \q
+     ```
+   - Update `.env` with your database credentials (see below)
 
-4. Verify database is ready
-   ```bash
-   docker-compose exec db pg_isready -U postgres
-   ```
-
-5. Copy environment variables
+4. Copy environment variables
    ```bash
    cp .env.example .env
-   # Edit .env if needed (defaults work with Docker Compose)
+   # Edit .env with your database credentials
    ```
 
-6. Test database connection
+5. Test database connection
    ```bash
    npm run test:db
    ```
 
-7. Start the development server
+6. Start the development server
    ```bash
    npm run dev
    ```
 
-### Option 2: Direct PostgreSQL Installation
-1. Install PostgreSQL (v13 or higher)
-2. Create a database and user:
+7. Start the production server
    ```bash
-   # Connect to PostgreSQL
-   sudo -u postgres psql
-   
-   # Inside psql:
-   CREATE DATABASE transitops;
-   CREATE USER your_username WITH PASSWORD 'your_password';
-   GRANT ALL PRIVILEGES ON DATABASE transitops TO your_username;
-   \q
+   npm start
    ```
-3. Update `.env` with your database credentials
-4. Follow steps 2, 5-7 from the Docker Compose method above
 
 ### Environment Variables
 Create a `.env` file in the root directory with the following variables:
 
 ```env
 # Database Configuration
-# For Docker Compose (default values):
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=transitops
-DB_USER=postgres
-DB_PASSWORD=postgres
-
-# For direct PostgreSQL installation:
-# DB_HOST=localhost
-# DB_PORT=5432
-# DB_NAME=transitops
-# DB_USER=your_postgres_username
-# DB_PASSWORD=your_postgres_password
+DB_USER=your_postgres_username
+DB_PASSWORD=your_postgres_password
 
 # Server Configuration
 PORT=5000
@@ -305,8 +288,8 @@ npm test -- --coverage
 
 ### Prerequisites
 - Node.js (v18 or higher)
-- PostgreSQL (v13 or higher)
-- Process manager (PM2, Docker, etc.)
+- PostgreSQL (v18)
+- Process manager (PM2, etc.)
 
 ### Production Deployment
 1. Set `NODE_ENV=production`
@@ -316,40 +299,14 @@ npm test -- --coverage
 5. Set up process manager or container orchestration
 6. Monitor logs and performance
 
-### Docker Deployment
+### Manual Deployment
 ```bash
-# Build and run with Docker Compose
-docker-compose up -d --build
+# Install dependencies
+npm ci --only=production
 
-# Or build standalone image
-docker build -t transitops-backend .
-docker run -p 5000:5000 --env-file .env transitops-backend
+# Start server
+npm start
 ```
-
-### Kubernetes Deployment
-(Refer to k8s/ directory for manifests)
-
-## Docker
-
-### Quick Start with Docker Compose
-```bash
-# Start all services
-docker-compose up -d
-
-# Stop all services
-docker-compose down
-
-# View logs
-docker-compose logs -f
-
-# Access Adminer (database GUI)
-# Visit http://localhost:8080
-# Use PostgreSQL credentials from .env
-```
-
-### Docker Compose Services
-- **db**: PostgreSQL 15 database
-- **adminer**: Web-based database administration tool
 
 ## Contributing
 

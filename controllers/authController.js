@@ -1,3 +1,5 @@
+const crypto = require('crypto');
+const { Sequelize } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const asyncHandler = require('express-async-handler');
 const User = require('../models/User');
@@ -62,7 +64,10 @@ const loginUser = asyncHandler(async (req, res) => {
   // Check for user
   const user = await User.findOne({ where: { email } });
 
-  if (user && (await bcrypt.compare(password, user.password))) {
+  if (user && (await user.isValidPassword(password))) {
+    // Update last login
+    await user.updateLastLogin();
+
     res.status(200).json({
       success: true,
       data: {
@@ -83,17 +88,14 @@ const loginUser = asyncHandler(async (req, res) => {
 // @route   GET /api/v1/auth/me
 // @access  Private
 const getMe = asyncHandler(async (req, res) => {
-  const user = await User.findByPk(req.user.id);
+  const user = await User.findByPk(req.user.id, {
+    attributes: { exclude: ['password', 'passwordResetToken', 'passwordResetExpires'] }
+  });
 
   if (user) {
     res.status(200).json({
       success: true,
-      data: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
+      data: user
     });
   } else {
     res.status(404);
@@ -133,9 +135,93 @@ const updateProfile = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    Forgot password
+// @route   POST /api/v1/auth/forgotpassword
+// @access  Public
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    res.status(400);
+    throw new Error('Please provide an email address');
+  }
+
+  const user = await User.findOne({ where: { email } });
+
+  if (!user) {
+    // Return same message to prevent email enumeration
+    return res.status(200).json({
+      success: true,
+      message: 'If the email exists in our system, you will receive a password reset link'
+    });
+  }
+
+  // Generate reset token
+  const resetToken = crypto.randomBytes(32).toString('hex');
+
+  // Hash token and set to resetPasswordToken field
+  user.passwordResetToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+
+  // Set expire (1 hour from now)
+  user.passwordResetExpires = Date.now() + 3600000; // 1 hour
+
+  await user.save();
+
+  // In a real application, you would send an email here
+  // For now, we'll just return the token (NOT SECURE - for demo only)
+  res.status(200).json({
+    success: true,
+    message: 'Password reset token generated',
+    // In production, remove this and send email instead
+    resetToken: resetToken // REMOVE THIS IN PRODUCTION
+  });
+});
+
+// @desc    Reset password
+// @route   PUT /api/v1/auth/resetpassword/:token
+// @access  Public
+const resetPassword = asyncHandler(async (req, res) => {
+  // Hash URL token
+  const resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(req.params.token)
+    .digest('hex');
+
+  const user = await User.findOne({
+    where: {
+      passwordResetToken: resetPasswordToken,
+      passwordResetExpires: {
+        [Sequelize.Op.gt]: Date.now()
+      }
+    }
+  });
+
+  if (!user) {
+    res.status(400);
+    throw new Error('Invalid or expired token');
+  }
+
+  // Set new password
+  user.password = req.body.password;
+  user.passwordResetToken = undefined;
+  user.passwordResetExpires = undefined;
+
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Password reset successful'
+  });
+});
+
 module.exports = {
   registerUser,
   loginUser,
   getMe,
-  updateProfile
+  updateProfile,
+  forgotPassword,
+  resetPassword
 };

@@ -11,14 +11,13 @@
 - Configured Sequelize ORM for PostgreSQL
 - Created database connection module with error handling
 - Added .env.example with template configuration
-- Provided Docker Compose setup for easy PostgreSQL deployment
+- Provided setup instructions for PostgreSQL 18
 - Created database connection test script
 
 ✅ **Development Tools**
 - Configured ESLint for code quality
 - Configured Prettier for code formatting
 - Added npm scripts for development (dev, start, test, lint, format)
-- Created Dockerfile and docker-compose.yml for containerization
 - Added comprehensive README with setup instructions
 
 ## Phase 1: User/Role Model & Authentication (In Progress - Foundation Laid)
@@ -58,7 +57,7 @@
 
 ### Immediate Next Steps (Phase 1 Continued):
 1. **Test Authentication Endpoints**
-   - Start PostgreSQL (via Docker Compose: `docker-compose up -d`)
+   - Start PostgreSQL 18 (installed locally)
    - Run `npm run test:db` to verify connection
    - Start server: `npm run dev`
    - Test endpoints using Postman or curl:
@@ -155,12 +154,6 @@ While Nitin works on Vehicle and Driver models, Paras should:
 - `.env.example` - Environment variables template
 - `.gitignore` - Git ignore rules
 - `README.md` - Comprehensive project documentation
-- `Dockerfile` - Containerization instructions
-- `docker-compose.yml` - PostgreSQL + Adminer setup
-- `tests/auth.test.js` - Authentication test placeholder
-- `jest.config.js` - Jest configuration
-- `.eslintrc.js` - ESLint configuration
-- `.prettierrc` - Prettier configuration
 - `validate.js` - Validation script
 
 ### Models:
@@ -183,7 +176,7 @@ While Nitin works on Vehicle and Driver models, Paras should:
 - `test-db.js` - Database connection test
 
 ## Next Steps for Paras:
-1. Verify database connection works with PostgreSQL (via Docker Compose recommended)
+1. Verify database connection works with PostgreSQL 18 (local installation recommended)
 2. Test authentication endpoints with Postman/curl
 3. Refine role-based access control implementation
 4. Prepare for integration with Vehicle and Driver models (Nitin's work)
