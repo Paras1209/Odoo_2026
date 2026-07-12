@@ -6,6 +6,8 @@ const filesToValidate = [
   'server.js',
   'config/database.js',
   'models/User.js',
+  'models/Vehicle.js',
+  'models/Driver.js',
   'controllers/authController.js',
   'routes/authRoutes.js',
   'middleware/auth.js',
@@ -34,25 +36,25 @@ filesToValidate.forEach(file => {
         // This is a very basic check - just see if we can read the file
         console.log(`⚠️  ${file} (readable but may have runtime dependencies)`);
       } catch (readError) {
-        console.log(`❌ ${file} - Cannot read file: ${readError.message}`);
+        console.log(`${file} - Cannot read file: ${readError.message}`);
         hasErrors = true;
       }
     } else if (error instanceof SyntaxError) {
-      console.log(`❌ ${file} - Syntax Error: ${error.message}`);
+      console.log(`${file} - Syntax Error: ${error.message}`);
       hasErrors = true;
     } else {
       // Other errors might be due to missing dependencies (like database connection)
       // which is okay for syntax checking
-      console.log(`✅ ${file} (loads with potential runtime dependencies)`);
+      console.log(` ${file} (loads with potential runtime dependencies)`);
     }
   }
 });
 
 console.log('\n' + '='.repeat(50));
 if (hasErrors) {
-  console.log('❌ Validation completed with errors');
+  console.log(' Validation completed with errors');
   process.exit(1);
 } else {
-  console.log('✅ All files are syntactically valid');
+  console.log('All files are syntactically valid');
   process.exit(0);
 }
