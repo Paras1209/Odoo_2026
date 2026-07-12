@@ -3,6 +3,7 @@ const { Sequelize } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const asyncHandler = require('express-async-handler');
 const User = require('../models/User');
+const Role = require('../models/Role');
 const { generateToken } = require('../utils/authUtils');
 
 // @desc    Register a new user
@@ -25,12 +26,20 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new Error('User already exists');
   }
 
+  const roleCode = role || 'employee';
+  const userRole = await Role.findOne({ where: { code: roleCode } });
+
+  if (!userRole) {
+    res.status(400);
+    throw new Error(`Invalid role: ${roleCode}`);
+  }
+
   // Create user
   const user = await User.create({
     name,
     email,
     password,
-    role: role || 'employee'
+    roleId: userRole.id
   });
 
   if (user) {
@@ -40,7 +49,7 @@ const registerUser = asyncHandler(async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        role: userRole.code,
         token: generateToken(user.id)
       }
     });
@@ -62,7 +71,10 @@ const loginUser = asyncHandler(async (req, res) => {
   }
 
   // Check for user
-  const user = await User.findOne({ where: { email } });
+  const user = await User.findOne({
+    where: { email },
+    include: [{ model: Role, as: 'roleInfo', attributes: ['id', 'code', 'name'] }]
+  });
 
   if (user && (await user.isValidPassword(password))) {
     // Update last login
@@ -74,7 +86,7 @@ const loginUser = asyncHandler(async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        role: user.roleInfo?.code ?? null,
         token: generateToken(user.id)
       }
     });
@@ -89,7 +101,8 @@ const loginUser = asyncHandler(async (req, res) => {
 // @access  Private
 const getMe = asyncHandler(async (req, res) => {
   const user = await User.findByPk(req.user.id, {
-    attributes: { exclude: ['password', 'passwordResetToken', 'passwordResetExpires'] }
+    attributes: { exclude: ['password', 'passwordResetToken', 'passwordResetExpires'] },
+    include: [{ model: Role, as: 'roleInfo', attributes: ['id', 'code', 'name'] }]
   });
 
   if (user) {
@@ -107,7 +120,9 @@ const getMe = asyncHandler(async (req, res) => {
 // @route   PUT /api/v1/auth/profile
 // @access  Private
 const updateProfile = asyncHandler(async (req, res) => {
-  const user = await User.findByPk(req.user.id);
+  const user = await User.findByPk(req.user.id, {
+    include: [{ model: Role, as: 'roleInfo', attributes: ['id', 'code', 'name'] }]
+  });
 
   if (user) {
     user.name = req.body.name || user.name;
@@ -126,7 +141,7 @@ const updateProfile = asyncHandler(async (req, res) => {
         id: updatedUser.id,
         name: updatedUser.name,
         email: updatedUser.email,
-        role: updatedUser.role
+        role: updatedUser.roleInfo?.code ?? null
       }
     });
   } else {

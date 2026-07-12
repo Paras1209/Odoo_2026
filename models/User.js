@@ -32,16 +32,15 @@ const User = sequelize.define('User', {
       len: [6, 255]
     }
   },
-  role: {
-    type: DataTypes.ENUM(
-      'admin',
-      'fleet_manager',
-      'driver',
-      'safety_officer',
-      'financial_analyst'
-    ),
+  roleId: {
+    type: DataTypes.UUID,
     allowNull: false,
-    defaultValue: 'employee'
+    references: {
+      model: 'roles',
+      key: 'id'
+    },
+    onUpdate: 'CASCADE',
+    onDelete: 'RESTRICT'
   },
   status: {
     type: DataTypes.ENUM('active', 'inactive', 'suspended'),
@@ -72,13 +71,30 @@ const User = sequelize.define('User', {
       fields: ['status']
     },
     {
-      fields: ['role']
+      fields: ['roleId']
     },
     {
       fields: ['passwordResetToken']
     }
   ],
   hooks: {
+    beforeValidate: async (user) => {
+      if (!user.roleId) {
+        const Role = sequelize.models.Role;
+
+        if (!Role) {
+          throw new Error('Role model is not initialized');
+        }
+
+        const defaultRole = await Role.findOne({ where: { code: 'employee' } });
+
+        if (!defaultRole) {
+          throw new Error('Default employee role is missing');
+        }
+
+        user.roleId = defaultRole.id;
+      }
+    },
     beforeCreate: async (user) => {
       if (user.password) {
         const salt = await bcrypt.genSalt(10);
@@ -101,7 +117,8 @@ User.prototype.isValidPassword = async function(password) {
 
 // Instance method to get public profile (without sensitive data)
 User.prototype.getPublicProfile = function() {
-  const { id, name, email, role, status, lastLoginAt, createdAt, updatedAt } = this;
+  const role = this.roleInfo?.code ?? null;
+  const { id, name, email, status, lastLoginAt, createdAt, updatedAt } = this;
   return { id, name, email, role, status, lastLoginAt, createdAt, updatedAt };
 };
 

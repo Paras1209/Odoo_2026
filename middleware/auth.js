@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const asyncHandler = require('express-async-handler');
 const User = require('../models/User');
+const Role = require('../models/Role');
 
 const protect = asyncHandler(async (req, res, next) => {
   let token;
@@ -18,7 +19,8 @@ const protect = asyncHandler(async (req, res, next) => {
 
       // Get user from token
       req.user = await User.findByPk(decoded.id, {
-        attributes: { exclude: ['password', 'passwordResetToken', 'passwordResetExpires'] }
+        attributes: { exclude: ['password', 'passwordResetToken', 'passwordResetExpires'] },
+        include: [{ model: Role, as: 'roleInfo', attributes: ['id', 'code', 'name'] }]
       });
 
       if (!req.user) {
@@ -63,7 +65,9 @@ const authorize = (...roles) => {
       throw new Error('Not authorized');
     }
 
-    if (!roles.includes(req.user.role)) {
+    const userRole = req.user.roleInfo?.code ?? null;
+
+    if (!userRole || !roles.includes(userRole)) {
       res.status(403);
       throw new Error('Not authorized to access this resource');
     }
