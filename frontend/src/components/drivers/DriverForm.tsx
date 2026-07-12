@@ -154,7 +154,7 @@ const DriverForm: React.FC = () => {
                       labelId="category-label"
                       label="License Category"
                     >
-                      <MenuItem value="A">A - Motorcycle (>35kW)</MenuItem>
+                      <MenuItem value="A">A - Motorcycle (35kW+)</MenuItem>
                       <MenuItem value="A1">A1 - Light Motorcycle</MenuItem>
                       <MenuItem value="A2">A2 - Medium Motorcycle</MenuItem>
                       <MenuItem value="B">B - Car</MenuItem>
