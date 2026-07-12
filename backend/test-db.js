@@ -23,11 +23,11 @@ const testDatabaseConnection = async () => {
       console.error('   - On Linux: sudo service postgresql start');
       console.error('   - On macOS: brew services start postgresql');
       console.error('   - On Windows: Start PostgreSQL service via Services app');
-    } else if (error.original && (original.code === '28P01' || original.message.includes('password authentication failed'))) {
+    } else if (error.original && (error.original.code === '28P01' || error.original.message.includes('password authentication failed'))) {
       console.error('\n💡 Authentication failed. Check your credentials in .env:');
       console.error('   - DB_USER:', process.env.DB_USER);
       console.error('   - DB_PASSWORD: [hidden]');
-      console.error('   - Create user with: CREATE USER ' + process.env.DB_USER + ' WITH PASSWORD '\'' + process.env.DB_PASSWORD + '\'' + ';');
+      console.error('   - Create user with: CREATE USER ' + process.env.DB_USER + ' WITH PASSWORD \'' + process.env.DB_PASSWORD + '\';');
       console.error('   - Create database with: CREATE DATABASE ' + process.env.DB_NAME + ';');
       console.error('   - Grant privileges: GRANT ALL PRIVILEGES ON DATABASE ' + process.env.DB_NAME + ' TO ' + process.env.DB_USER + ';');
     }
