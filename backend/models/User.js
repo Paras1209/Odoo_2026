@@ -32,8 +32,14 @@ const User = sequelize.define('User', {
       len: [6, 255]
     }
   },
-  roleId: {
-    type: DataTypes.UUID,
+  role: {
+    type: DataTypes.ENUM(
+      'admin',
+      'fleet_manager',
+      'driver',
+      'safety_officer',
+      'financial_analyst'
+    ),
     allowNull: false,
     references: {
       model: 'roles',

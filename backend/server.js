@@ -34,7 +34,7 @@ app.get('/health', (req, res) => {
 app.use('/api/v1/auth', require('./routes/authRoutes'));
 
 // 404 handler
-app.use('*', (req, res) => {
+app.use((req, res) => {
   res.status(404).json({
     status: 'error',
     message: `Route ${req.originalUrl} not found`
@@ -64,7 +64,7 @@ const startServer = async () => {
     app.listen(PORT, () => {
       console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
       console.log(`Health check: http://localhost:${PORT}/health`);
-      console.log(`API docs: http://localhost:${PORT}/api-docs`);
+      console.log(`API docs: http://${PORT}/api-docs`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
