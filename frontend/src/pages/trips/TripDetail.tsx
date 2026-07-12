@@ -64,7 +64,8 @@ const TripDetail: React.FC = () => {
   const {
     data: trip,
     isLoading,
-    error
+    error,
+    refetch
   } = useQuery<Trip, Error>({
     queryKey: tripId ? ['trip', tripId, user?.role === 'driver' ? user.id : null] : [],
     queryFn: () => tripService.getTripById(tripId!).then(response => {
@@ -105,8 +106,7 @@ const TripDetail: React.FC = () => {
       setIsCompletedDialogOpen(false);
       setActualDistance('');
       setFuelConsumed('');
-      // Refetch trip data
-      window.location.reload();
+      refetch();
     } catch (err: any) {
       enqueueSnackbar(
         err.response?.data?.error?.message ||
@@ -122,8 +122,7 @@ const TripDetail: React.FC = () => {
     try {
       await tripService.cancelTrip(tripId);
       enqueueSnackbar('Trip cancelled successfully', { variant: 'success' });
-      // Refetch trip data
-      window.location.reload();
+      refetch();
     } catch (err: any) {
       enqueueSnackbar(
         err.response?.data?.error?.message ||
@@ -379,10 +378,13 @@ const TripDetail: React.FC = () => {
                   {trip.status === 'draft' && (
                     <Button
                       variant="outlined"
-                      onClick={() => {
-                        tripService.dispatchTrip(trip.id).then(() => {
-                          window.location.reload();
-                        });
+                      onClick={async () => {
+                        try {
+                          await tripService.dispatchTrip(trip.id);
+                          refetch();
+                        } catch (err: any) {
+                          enqueueSnackbar(err.response?.data?.error?.message || 'Failed to dispatch trip', { variant: 'error' });
+                        }
                       }}
                     >
                       Dispatch Trip
@@ -434,10 +436,13 @@ const TripDetail: React.FC = () => {
                   {trip.driverId === user?.id && trip.status === 'draft' && (
                     <Button
                       variant="outlined"
-                      onClick={() => {
-                        tripService.dispatchTrip(trip.id).then(() => {
-                          window.location.reload();
-                        });
+                      onClick={async () => {
+                        try {
+                          await tripService.dispatchTrip(trip.id);
+                          refetch();
+                        } catch (err: any) {
+                          enqueueSnackbar(err.response?.data?.error?.message || 'Failed to dispatch trip', { variant: 'error' });
+                        }
                       }}
                     >
                       Dispatch Trip

@@ -1,92 +1,77 @@
 const asyncHandler = require('express-async-handler');
 const Driver = require('../models/Driver');
+const { 
+  parseNumericValue, 
+  validateStringField,
+  validateEnumField,
+  validateDateField,
+  createUpdateValidator
+} = require('../utils/validation');
+const { ALLOWED_DRIVER_STATUSES, LICENSE_CATEGORIES } = require('../constants');
 
-const allowedDriverStatuses = ['active', 'inactive', 'suspended', 'on_leave'];
-const allowedLicenseCategories = ['A', 'A1', 'A2', 'B', 'B1', 'C', 'C1', 'D', 'D1', 'E', 'F', 'G', 'H', 'other'];
-
-const parseNumericValue = (value) => {
-  if (value === undefined || value === null || value === '') return value;
-  const numericValue = Number(value);
-  return Number.isNaN(numericValue) ? value : numericValue;
-};
-
-const validateString = (errors, value, fieldName, min, max, required = true) => {
-  const text = String(value || '').trim();
-  if (!text) {
-    if (required) errors.push(`${fieldName} is required`);
-    return;
-  }
-  if (text.length < min || text.length > max) {
-    errors.push(`${fieldName} must be between ${min} and ${max} characters`);
-  }
-};
-
+/**
+ * Validate driver payload
+ * @param {Object} payload - Driver data to validate
+ * @param {boolean} isUpdate - Whether this is an update operation
+ * @returns {Array} - Array of error messages
+ */
 const validateDriverPayload = (payload, isUpdate = false) => {
   const errors = [];
-  const shouldValidate = (field) => !isUpdate || payload[field] !== undefined;
+  const shouldValidate = createUpdateValidator(isUpdate, payload);
 
-  if (shouldValidate('name')) validateString(errors, payload.name, 'name', 2, 120);
-  if (shouldValidate('licenseNumber')) validateString(errors, payload.licenseNumber, 'licenseNumber', 3, 60);
-  if (shouldValidate('contact')) validateString(errors, payload.contact, 'contact', 5, 255);
-  if (shouldValidate('licenseCategory') && !allowedLicenseCategories.includes(payload.licenseCategory)) {
-    errors.push(`licenseCategory must be one of: ${allowedLicenseCategories.join(', ')}`);
+  if (shouldValidate('name')) {
+    validateStringField(errors, payload.name, 'name', 2, 120, !isUpdate);
   }
-  if (shouldValidate('licenseExpiry') && Number.isNaN(new Date(payload.licenseExpiry).getTime())) {
-    errors.push('licenseExpiry must be a valid date');
+
+  if (shouldValidate('licenseNumber')) {
+    validateStringField(errors, payload.licenseNumber, 'licenseNumber', 3, 60, !isUpdate);
   }
-  if (shouldValidate('safetyScore')) {
+
+  if (shouldValidate('contact')) {
+    validateStringField(errors, payload.contact, 'contact', 5, 255, !isUpdate);
+  }
+
+  if (shouldValidate('licenseCategory') && payload.licenseCategory) {
+    validateEnumField(errors, payload.licenseCategory, 'licenseCategory', LICENSE_CATEGORIES);
+  }
+
+  if (shouldValidate('licenseExpiry') && payload.licenseExpiry) {
+    validateDateField(errors, payload.licenseExpiry, 'licenseExpiry', !isUpdate);
+  }
+
+  if (shouldValidate('safetyScore') && payload.safetyScore !== undefined) {
     const safetyScore = Number(payload.safetyScore);
     if (Number.isNaN(safetyScore) || safetyScore < 0 || safetyScore > 100) {
       errors.push('safetyScore must be a number between 0 and 100');
     }
   }
-  if (shouldValidate('status') && !allowedDriverStatuses.includes(payload.status)) {
-    errors.push(`status must be one of: ${allowedDriverStatuses.join(', ')}`);
+
+  if (shouldValidate('status') && payload.status) {
+    validateEnumField(errors, payload.status, 'status', ALLOWED_DRIVER_STATUSES);
   }
+
   return errors;
 };
 
-const normalizeDriverPayload = (payload) => ({
-  name: payload.name?.trim(),
-  licenseNumber: payload.licenseNumber?.trim(),
-  licenseCategory: payload.licenseCategory,
-  licenseExpiry: payload.licenseExpiry,
-  contact: payload.contact?.trim(),
-  safetyScore: parseNumericValue(payload.safetyScore),
-  status: payload.status
-});
+/**
+ * Normalize driver payload
+ * @param {Object} payload - Raw driver data
+ * @returns {Object} - Normalized driver data
+ */
+const normalizeDriverPayload = (payload) => {
+  const normalized = {};
 
-const createDriver = asyncHandler(async (req, res) => {
-  const errors = validateDriverPayload(req.body);
-  if (errors.length) {
-    res.status(400);
-    throw new Error(errors.join('; '));
-  }
-  const existingDriver = await Driver.findOne({ where: { licenseNumber: req.body.licenseNumber.trim() } });
-  if (existingDriver) {
-    res.status(400);
-    throw new Error('Driver with this licenseNumber already exists');
-  }
-  const driver = await Driver.create(normalizeDriverPayload(req.body));
-  res.status(201).json({ success: true, data: driver });
-});
+  if (payload.name !== undefined) normalized.name = payload.name.trim();
+  if (payload.licenseNumber !== undefined) normalized.licenseNumber = payload.licenseNumber.trim();
+  if (payload.licenseCategory !== undefined) normalized.licenseCategory = payload.licenseCategory;
+  if (payload.licenseExpiry !== undefined) normalized.licenseExpiry = payload.licenseExpiry;
+  if (payload.contact !== undefined) normalized.contact = payload.contact.trim();
+  if (payload.safetyScore !== undefined) normalized.safetyScore = parseNumericValue(payload.safetyScore);
+  if (payload.status !== undefined) normalized.status = payload.status;
 
-const getDrivers = asyncHandler(async (req, res) => {
-  const drivers = await Driver.findAll({ order: [['createdAt', 'DESC']] });
-  res.status(200).json({ success: true, count: drivers.length, data: drivers });
-});
+  return normalized;
+};
 
-const getDriver = asyncHandler(async (req, res) => {
-  const driver = await Driver.findByPk(req.params.id);
-  if (!driver) {
-    res.status(404);
-    throw new Error('Driver not found');
-  }
-  res.status(200).json({ success: true, data: driver });
-});
-
-const updateDriver = asyncHandler(async (req, res) => {
-  const driver = await Driver.findByPk(req.params.id);
 // @desc    Get all drivers
 // @route   GET /api/v1/drivers
 // @access  Private
@@ -95,17 +80,13 @@ const getDrivers = asyncHandler(async (req, res) => {
 
   const filter = {};
   
-  // Default to active drivers if no status specified
   if (status) {
     filter.status = status;
-  } else {
-    filter.status = 'Active';
   }
 
   const drivers = await Driver.findAll({
     where: filter,
-    attributes: { exclude: ['password'] },
-    order: [['name', 'ASC']]
+    order: [['createdAt', 'DESC']]
   });
 
   res.status(200).json({
@@ -119,9 +100,7 @@ const getDrivers = asyncHandler(async (req, res) => {
 // @route   GET /api/v1/drivers/:id
 // @access  Private
 const getDriver = asyncHandler(async (req, res) => {
-  const driver = await Driver.findByPk(req.params.id, {
-    attributes: { exclude: ['password'] }
-  });
+  const driver = await Driver.findByPk(req.params.id);
 
   if (!driver) {
     res.status(404);
@@ -138,30 +117,25 @@ const getDriver = asyncHandler(async (req, res) => {
 // @route   POST /api/v1/drivers
 // @access  Private/Admin
 const createDriver = asyncHandler(async (req, res) => {
-  const { name, email, phone, licenseNumber, licenseExpiry } = req.body;
-
-  // Validate required fields
-  if (!name || !email || !phone || !licenseNumber || !licenseExpiry) {
+  // Validate payload
+  const errors = validateDriverPayload(req.body);
+  if (errors.length > 0) {
     res.status(400);
-    throw new Error('Please provide all required fields');
+    throw new Error(errors.join('; '));
   }
 
   // Check if license number already exists
-  const existingDriver = await Driver.findOne({ where: { licenseNumber } });
+  const existingDriver = await Driver.findOne({ 
+    where: { licenseNumber: req.body.licenseNumber.trim() } 
+  });
+
   if (existingDriver) {
     res.status(400);
     throw new Error('Driver with this license number already exists');
   }
 
-  const driver = await Driver.create({
-    name,
-    email,
-    phone,
-    licenseNumber,
-    licenseExpiry,
-    status: 'Active',
-    safetyScore: 100
-  });
+  // Create driver
+  const driver = await Driver.create(normalizeDriverPayload(req.body));
 
   res.status(201).json({
     success: true,
@@ -179,46 +153,39 @@ const updateDriver = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Driver not found');
   }
+
+  // Validate payload
   const errors = validateDriverPayload(req.body, true);
-  if (errors.length) {
+  if (errors.length > 0) {
     res.status(400);
     throw new Error(errors.join('; '));
   }
+
+  // Check if license number is being changed and already exists
   if (req.body.licenseNumber !== undefined) {
     const licenseNumber = req.body.licenseNumber.trim();
     if (licenseNumber !== driver.licenseNumber) {
       const existingDriver = await Driver.findOne({ where: { licenseNumber } });
       if (existingDriver) {
         res.status(400);
-        throw new Error('Driver with this licenseNumber already exists');
+        throw new Error('Driver with this license number already exists');
       }
     }
   }
-  Object.entries(normalizeDriverPayload(req.body)).forEach(([field, value]) => {
-    if (req.body[field] !== undefined) driver[field] = value;
+
+  // Update driver fields
+  const normalizedData = normalizeDriverPayload(req.body);
+  Object.entries(normalizedData).forEach(([field, value]) => {
+    if (value !== undefined) {
+      driver[field] = value;
+    }
   });
+
   const updatedDriver = await driver.save();
-  res.status(200).json({ success: true, data: updatedDriver });
-});
-
-const deleteDriver = asyncHandler(async (req, res) => {
-  const driver = await Driver.findByPk(req.params.id);
-
-  const { name, email, phone, licenseNumber, licenseExpiry, status, safetyScore } = req.body;
-
-  if (name) driver.name = name;
-  if (email) driver.email = email;
-  if (phone) driver.phone = phone;
-  if (licenseNumber) driver.licenseNumber = licenseNumber;
-  if (licenseExpiry) driver.licenseExpiry = licenseExpiry;
-  if (status) driver.status = status;
-  if (safetyScore !== undefined) driver.safetyScore = safetyScore;
-
-  await driver.save();
 
   res.status(200).json({
     success: true,
-    data: driver
+    data: updatedDriver
   });
 });
 
@@ -232,11 +199,6 @@ const deleteDriver = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Driver not found');
   }
-  await driver.destroy();
-  res.status(200).json({ success: true, message: 'Driver deleted successfully' });
-});
-
-module.exports = { createDriver, getDrivers, getDriver, updateDriver, deleteDriver, validateDriverPayload };
 
   await driver.destroy();
 
@@ -251,5 +213,6 @@ module.exports = {
   getDriver,
   createDriver,
   updateDriver,
-  deleteDriver
+  deleteDriver,
+  validateDriverPayload
 };

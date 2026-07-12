@@ -2,19 +2,20 @@ const asyncHandler = require('express-async-handler');
 const Vehicle = require('../models/Vehicle');
 const Maintenance = require('../models/Maintenance');
 const Expense = require('../models/Expense');
+const {
+  parseNumericValue,
+  validateStringField,
+  validateNumericField,
+  validateEnumField,
+  createUpdateValidator
+} = require('../utils/validation');
+const { VEHICLE_TYPES, ALLOWED_VEHICLE_STATUSES } = require('../constants');
 
-const allowedVehicleTypes = ['bus', 'van', 'truck', 'car', 'motorcycle', 'trailer', 'other'];
-const allowedVehicleStatuses = ['available', 'on_trip', 'in_shop', 'retired', 'active', 'inactive', 'maintenance'];
-const normalizedVehicleStatuses = {
-  active: 'available',
-  inactive: 'retired',
-  maintenance: 'in_shop',
-  available: 'available',
-  on_trip: 'on_trip',
-  in_shop: 'in_shop',
-  retired: 'retired'
-};
-
+/**
+ * Build operational cost summary for a vehicle
+ * @param {string} vehicleId - Vehicle ID
+ * @returns {Object} - Operational cost breakdown
+ */
 const buildOperationalCostSummary = async (vehicleId) => {
   const [fuelCost, maintenanceCost] = await Promise.all([
     Expense.sum('amount', {
@@ -41,6 +42,11 @@ const buildOperationalCostSummary = async (vehicleId) => {
   };
 };
 
+/**
+ * Enrich vehicle data with operational cost
+ * @param {Object} vehicle - Vehicle instance
+ * @returns {Object} - Vehicle data with operational cost
+ */
 const enrichVehicleWithOperationalCost = async (vehicle) => {
   if (!vehicle) {
     return vehicle;
@@ -54,113 +60,93 @@ const enrichVehicleWithOperationalCost = async (vehicle) => {
   };
 };
 
-const parseNumericValue = (value) => {
-  if (value === undefined || value === null || value === '') {
-    return value;
-  }
-
-  const numericValue = Number(value);
-  return Number.isNaN(numericValue) ? value : numericValue;
-};
-
-const validateStringField = (errors, value, fieldName, minLength, maxLength, required) => {
-  const stringValue = String(value || '').trim();
-
-  if (!stringValue) {
-    if (required) {
-      errors.push(`${fieldName} is required`);
-    }
-    return;
-  }
-
-  if (stringValue.length < minLength || stringValue.length > maxLength) {
-    errors.push(`${fieldName} must be between ${minLength} and ${maxLength} characters`);
-  }
-};
-
-const validateNumericField = (errors, value, fieldName, minimum, allowIntegerOnly = false) => {
-  const numericValue = Number(value);
-
-  if (Number.isNaN(numericValue) || numericValue < minimum || (allowIntegerOnly && !Number.isInteger(numericValue))) {
-    const minimumText = minimum === 0 ? 'greater than or equal to 0' : `greater than or equal to ${minimum}`;
-    const typeText = allowIntegerOnly ? 'positive integer' : `number ${minimumText}`;
-    errors.push(`${fieldName} must be a ${typeText}`);
-  }
-};
-
-const validateEnumField = (errors, value, fieldName, allowedValues) => {
-  if (!allowedValues.includes(value)) {
-    errors.push(`${fieldName} must be one of: ${allowedValues.join(', ')}`);
-  }
-};
-
+/**
+ * Validate vehicle payload
+ * @param {Object} payload - Vehicle data to validate
+ * @param {boolean} isUpdate - Whether this is an update operation
+ * @returns {Array} - Array of error messages
+ */
 const validateVehiclePayload = (payload, isUpdate = false) => {
   const errors = [];
-  const shouldValidate = (fieldName) => !isUpdate || payload[fieldName] !== undefined;
+  const shouldValidate = createUpdateValidator(isUpdate, payload);
 
   if (shouldValidate('registrationNumber')) {
-    validateStringField(errors, payload.registrationNumber, 'registrationNumber', 2, 50, true);
+    validateStringField(errors, payload.registrationNumber, 'registrationNumber', 2, 50, !isUpdate);
   }
 
   if (shouldValidate('name')) {
-    validateStringField(errors, payload.name, 'name', 2, 120, true);
+    validateStringField(errors, payload.name, 'name', 2, 120, !isUpdate);
   }
 
   if (shouldValidate('model')) {
-    validateStringField(errors, payload.model, 'model', 2, 120, true);
+    validateStringField(errors, payload.model, 'model', 2, 120, !isUpdate);
   }
 
-  if (shouldValidate('type')) {
-    validateEnumField(errors, payload.type, 'type', allowedVehicleTypes);
+  if (shouldValidate('type') && payload.type) {
+    validateEnumField(errors, payload.type, 'type', VEHICLE_TYPES);
   }
 
-  if (shouldValidate('maxCapacity')) {
+  if (shouldValidate('maxCapacity') && payload.maxCapacity !== undefined) {
     validateNumericField(errors, payload.maxCapacity, 'maxCapacity', 1, true);
   }
 
-  if (shouldValidate('odometer')) {
+  if (shouldValidate('odometer') && payload.odometer !== undefined) {
     validateNumericField(errors, payload.odometer, 'odometer', 0);
   }
 
-  if (shouldValidate('acquisitionCost')) {
+  if (shouldValidate('acquisitionCost') && payload.acquisitionCost !== undefined) {
     validateNumericField(errors, payload.acquisitionCost, 'acquisitionCost', 0);
   }
 
-  if (shouldValidate('status')) {
-    validateEnumField(errors, payload.status, 'status', allowedVehicleStatuses);
+  if (shouldValidate('status') && payload.status) {
+    validateEnumField(errors, payload.status, 'status', ALLOWED_VEHICLE_STATUSES);
   }
 
   return errors;
 };
 
-const normalizeVehiclePayload = (payload) => ({
-  registrationNumber: payload.registrationNumber?.trim(),
-  name: payload.name?.trim(),
-  model: payload.model?.trim(),
-  type: payload.type,
-  maxCapacity: parseNumericValue(payload.maxCapacity),
-  odometer: parseNumericValue(payload.odometer),
-  acquisitionCost: parseNumericValue(payload.acquisitionCost),
-  status: normalizedVehicleStatuses[payload.status] ?? payload.status
-});
+/**
+ * Normalize vehicle payload
+ * @param {Object} payload - Raw vehicle data
+ * @returns {Object} - Normalized vehicle data
+ */
+const normalizeVehiclePayload = (payload) => {
+  const normalized = {};
 
+  if (payload.registrationNumber !== undefined) normalized.registrationNumber = payload.registrationNumber.trim();
+  if (payload.name !== undefined) normalized.name = payload.name.trim();
+  if (payload.model !== undefined) normalized.model = payload.model.trim();
+  if (payload.type !== undefined) normalized.type = payload.type;
+  if (payload.maxCapacity !== undefined) normalized.maxCapacity = parseNumericValue(payload.maxCapacity);
+  if (payload.odometer !== undefined) normalized.odometer = parseNumericValue(payload.odometer);
+  if (payload.acquisitionCost !== undefined) normalized.acquisitionCost = parseNumericValue(payload.acquisitionCost);
+  if (payload.status !== undefined) normalized.status = payload.status;
+
+  return normalized;
+};
+
+// @desc    Create new vehicle
+// @route   POST /api/v1/vehicles
+// @access  Private/Admin
 const createVehicle = asyncHandler(async (req, res) => {
+  // Validate payload
   const errors = validateVehiclePayload(req.body);
-
   if (errors.length > 0) {
     res.status(400);
     throw new Error(errors.join('; '));
   }
 
+  // Check if registration number already exists
   const existingVehicle = await Vehicle.findOne({
     where: { registrationNumber: req.body.registrationNumber.trim() }
   });
 
   if (existingVehicle) {
     res.status(400);
-    throw new Error('Vehicle with this registrationNumber already exists');
+    throw new Error('Vehicle with this registration number already exists');
   }
 
+  // Create vehicle
   const vehicle = await Vehicle.create(normalizeVehiclePayload(req.body));
 
   res.status(201).json({
@@ -169,19 +155,7 @@ const createVehicle = asyncHandler(async (req, res) => {
   });
 });
 
-const getVehicles = asyncHandler(async (req, res) => {
-  const vehicles = await Vehicle.findAll({ order: [['createdAt', 'DESC']] });
-  const vehiclesWithCosts = await Promise.all(vehicles.map(enrichVehicleWithOperationalCost));
-
-  res.status(200).json({
-    success: true,
-    count: vehiclesWithCosts.length,
-    data: vehiclesWithCosts
-  });
-});
-
-
-// @desc    Get all available vehicles
+// @desc    Get all vehicles
 // @route   GET /api/v1/vehicles
 // @access  Private
 const getVehicles = asyncHandler(async (req, res) => {
@@ -189,22 +163,24 @@ const getVehicles = asyncHandler(async (req, res) => {
 
   const filter = {};
   
-  // Default to available vehicles if no status specified
   if (status) {
     filter.status = status;
-  } else {
-    filter.status = 'Available';
   }
 
   const vehicles = await Vehicle.findAll({
     where: filter,
-    order: [['registrationNumber', 'ASC']]
+    order: [['createdAt', 'DESC']]
   });
+
+  // Enrich with operational costs
+  const vehiclesWithCosts = await Promise.all(
+    vehicles.map(enrichVehicleWithOperationalCost)
+  );
 
   res.status(200).json({
     success: true,
-    count: vehicles.length,
-    data: vehicles
+    count: vehiclesWithCosts.length,
+    data: vehiclesWithCosts
   });
 });
 
@@ -227,6 +203,9 @@ const getVehicle = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Update vehicle
+// @route   PUT /api/v1/vehicles/:id
+// @access  Private/Admin
 const updateVehicle = asyncHandler(async (req, res) => {
   const vehicle = await Vehicle.findByPk(req.params.id);
 
@@ -235,38 +214,32 @@ const updateVehicle = asyncHandler(async (req, res) => {
     throw new Error('Vehicle not found');
   }
 
+  // Validate payload
   const errors = validateVehiclePayload(req.body, true);
-
   if (errors.length > 0) {
     res.status(400);
     throw new Error(errors.join('; '));
   }
 
-  const updateField = (fieldName, transform = (value) => value) => {
-    if (req.body[fieldName] !== undefined) {
-      vehicle[fieldName] = transform(req.body[fieldName]);
-    }
-  };
-
+  // Check if registration number is being changed and already exists
   if (req.body.registrationNumber !== undefined) {
     const registrationNumber = req.body.registrationNumber.trim();
-    if (registrationNumber && registrationNumber !== vehicle.registrationNumber) {
+    if (registrationNumber !== vehicle.registrationNumber) {
       const existingVehicle = await Vehicle.findOne({ where: { registrationNumber } });
       if (existingVehicle) {
         res.status(400);
-        throw new Error('Vehicle with this registrationNumber already exists');
+        throw new Error('Vehicle with this registration number already exists');
       }
-      vehicle.registrationNumber = registrationNumber;
     }
   }
 
-  updateField('name', (value) => value.trim());
-  updateField('model', (value) => value.trim());
-  updateField('type');
-  updateField('maxCapacity', parseNumericValue);
-  updateField('odometer', parseNumericValue);
-  updateField('acquisitionCost', parseNumericValue);
-  updateField('status', (value) => normalizedVehicleStatuses[value] ?? value);
+  // Update vehicle fields
+  const normalizedData = normalizeVehiclePayload(req.body);
+  Object.entries(normalizedData).forEach(([field, value]) => {
+    if (value !== undefined) {
+      vehicle[field] = value;
+    }
+  });
 
   const updatedVehicle = await vehicle.save();
   const updatedVehicleWithCost = await enrichVehicleWithOperationalCost(updatedVehicle);
@@ -277,52 +250,10 @@ const updateVehicle = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Get vehicle operational cost
+// @route   GET /api/v1/vehicles/:id/operational-cost
+// @access  Private
 const getVehicleOperationalCost = asyncHandler(async (req, res) => {
-  res.status(200).json({
-    success: true,
-    data: vehicle
-  });
-});
-
-// @desc    Create new vehicle
-// @route   POST /api/v1/vehicles
-// @access  Private/Admin
-const createVehicle = asyncHandler(async (req, res) => {
-  const { registrationNumber, name, model, type, maxCapacity, acquisitionCost } = req.body;
-
-  // Validate required fields
-  if (!registrationNumber || !name || !model || !type || !maxCapacity || !acquisitionCost) {
-    res.status(400);
-    throw new Error('Please provide all required fields');
-  }
-
-  // Check if registration number already exists
-  const existingVehicle = await Vehicle.findOne({ where: { registrationNumber } });
-  if (existingVehicle) {
-    res.status(400);
-    throw new Error('Vehicle with this registration number already exists');
-  }
-
-  const vehicle = await Vehicle.create({
-    registrationNumber,
-    name,
-    model,
-    type,
-    maxCapacity,
-    acquisitionCost,
-    status: 'Available'
-  });
-
-  res.status(201).json({
-    success: true,
-    data: vehicle
-  });
-});
-
-// @desc    Update vehicle
-// @route   PUT /api/v1/vehicles/:id
-// @access  Private/Admin
-const updateVehicle = asyncHandler(async (req, res) => {
   const vehicle = await Vehicle.findByPk(req.params.id);
 
   if (!vehicle) {
@@ -340,25 +271,6 @@ const updateVehicle = asyncHandler(async (req, res) => {
       name: vehicle.name,
       ...operationalCost
     }
-  });
-});
-
-  const { registrationNumber, name, model, type, maxCapacity, acquisitionCost, status, odometer } = req.body;
-
-  if (registrationNumber) vehicle.registrationNumber = registrationNumber;
-  if (name) vehicle.name = name;
-  if (model) vehicle.model = model;
-  if (type) vehicle.type = type;
-  if (maxCapacity) vehicle.maxCapacity = maxCapacity;
-  if (acquisitionCost) vehicle.acquisitionCost = acquisitionCost;
-  if (status) vehicle.status = status;
-  if (odometer !== undefined) vehicle.odometer = odometer;
-
-  await vehicle.save();
-
-  res.status(200).json({
-    success: true,
-    data: vehicle
   });
 });
 
@@ -389,10 +301,4 @@ module.exports = {
   getVehicleOperationalCost,
   deleteVehicle,
   validateVehiclePayload
-};
-  getVehicles,
-  getVehicle,
-  createVehicle,
-  updateVehicle,
-  deleteVehicle
 };
