@@ -11,7 +11,11 @@ const filesToValidate = [
   'models/Driver.js',
   'models/index.js',
   'controllers/authController.js',
+  'controllers/vehicleController.js',
+  'controllers/driverController.js',
   'routes/authRoutes.js',
+  'routes/vehicleRoutes.js',
+  'routes/driverRoutes.js',
   'middleware/auth.js',
   'utils/authUtils.js'
 ];

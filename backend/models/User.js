@@ -1,4 +1,4 @@
-const { Sequelize, DataTypes } = require('sequelize');
+﻿const { Sequelize, DataTypes } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const sequelize = require('../config/database').sequelize;
 
@@ -32,14 +32,8 @@ const User = sequelize.define('User', {
       len: [6, 255]
     }
   },
-  role: {
-    type: DataTypes.ENUM(
-      'admin',
-      'fleet_manager',
-      'driver',
-      'safety_officer',
-      'financial_analyst'
-    ),
+  roleId: {
+    type: DataTypes.UUID,
     allowNull: false,
     references: {
       model: 'roles',
@@ -116,30 +110,25 @@ const User = sequelize.define('User', {
   }
 });
 
-// Instance method to check password
 User.prototype.isValidPassword = async function(password) {
   return await bcrypt.compare(password, this.password);
 };
 
-// Instance method to get public profile (without sensitive data)
 User.prototype.getPublicProfile = function() {
   const role = this.roleInfo?.code ?? null;
   const { id, name, email, status, lastLoginAt, createdAt, updatedAt } = this;
   return { id, name, email, role, status, lastLoginAt, createdAt, updatedAt };
 };
 
-// Instance method to update last login
 User.prototype.updateLastLogin = async function() {
   this.lastLoginAt = new Date();
   await this.save();
 };
 
-// Static method to find by email
 User.findByEmail = async function(email) {
   return await this.findOne({ where: { email } });
 };
 
-// Static method to find by reset token
 User.findByResetToken = async function(token) {
   return await this.findOne({
     where: {

@@ -71,9 +71,9 @@ const Vehicle = sequelize.define('Vehicle', {
     }
   },
   status: {
-    type: DataTypes.ENUM('active', 'inactive', 'maintenance', 'retired'),
+    type: DataTypes.ENUM('available', 'on_trip', 'in_shop', 'retired'),
     allowNull: false,
-    defaultValue: 'active'
+    defaultValue: 'available'
   }
 }, {
   timestamps: true,
