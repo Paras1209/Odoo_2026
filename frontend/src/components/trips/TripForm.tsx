@@ -13,10 +13,13 @@ import {
   FormControl,
   InputLabel,
   FormHelperText,
+  Alert,
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import tripService from '../../services/tripService';
+import vehicleService, { Vehicle } from '../../services/vehicleService';
+import driverService, { Driver } from '../../services/driverService';
 import { TripFormData, Trip } from '../../types/trip';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
@@ -69,12 +72,11 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
   
   const [vehicleOptions, setVehicleOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [driverOptions, setDriverOptions] = useState<Array<{ value: string; label: string }>>([]);
-  const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
-  const [mockVehicles] = useState([
-    { id: '1', registrationNumber: 'ABC-123', name: 'Truck A', type: 'truck', maxCapacity: 10000 },
-    { id: '2', registrationNumber: 'XYZ-789', name: 'Van B', type: 'van', maxCapacity: 3000 },
-    { id: '3', registrationNumber: 'DEF-456', name: 'Bus C', type: 'bus', maxCapacity: 50 },
-  ]);
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   const {
     register,
@@ -161,31 +163,56 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
     }
   }, [tripData, tripId, reset]);
 
-  // Simulate fetching vehicles and drivers (in a real app, these would come from API calls)
+  // Fetch vehicles and drivers from API
   useEffect(() => {
-    setVehicleOptions(
-      mockVehicles.map(v => ({
-        value: v.id,
-        label: `${v.registrationNumber} - ${v.name} (${v.type})`
-      }))
-    );
+    const fetchData = async () => {
+      try {
+        setLoadingData(true);
+        setDataError(null);
 
-    // Mock driver data
-    const mockDrivers = [
-      { id: '1', name: 'John Doe', licenseNumber: 'DL12345', safetyScore: 85 },
-      { id: '2', name: 'Jane Smith', licenseNumber: 'DL67890', safetyScore: 92 },
-      { id: '3', name: 'Bob Johnson', licenseNumber: 'DL54321', safetyScore: 78 },
-    ];
+        const [vehiclesRes, driversRes] = await Promise.all([
+          vehicleService.getVehicles('Available'),
+          driverService.getDrivers('Active')
+        ]);
 
-    setDriverOptions(
-      mockDrivers.map(d => ({
-        value: d.id,
-        label: `${d.name} - ${d.licenseNumber}`
-      }))
-    );
-  }, [mockVehicles]);
+        setVehicles(vehiclesRes.data);
+        setDrivers(driversRes.data);
+
+        setVehicleOptions(
+          vehiclesRes.data.map(v => ({
+            value: v.id,
+            label: `${v.registrationNumber} - ${v.name} (${v.type})`
+          }))
+        );
+
+        setDriverOptions(
+          driversRes.data.map(d => ({
+            value: d.id,
+            label: `${d.name} - ${d.licenseNumber}`
+          }))
+        );
+      } catch (err: any) {
+        const errorMsg = err.response?.data?.message || 'Failed to load vehicles and drivers';
+        setDataError(errorMsg);
+        enqueueSnackbar(errorMsg, { variant: 'error' });
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    fetchData();
+  }, [enqueueSnackbar]);
 
   const onSubmit: SubmitHandler<TripFormData> = async (data) => {
+    // Validate cargo weight against vehicle capacity
+    if (selectedVehicle && data.cargoWeight > selectedVehicle.maxCapacity) {
+      enqueueSnackbar(
+        `Cargo weight (${data.cargoWeight} kg) exceeds vehicle capacity (${selectedVehicle.maxCapacity} kg)`,
+        { variant: 'error' }
+      );
+      return;
+    }
+
     // Validate required fields
     if (!data.vehicleId) {
       enqueueSnackbar('Please select a vehicle', { variant: 'error' });
@@ -222,7 +249,7 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
       }
     } catch (err: any) {
       enqueueSnackbar(
-        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
         'An error occurred while saving the trip',
         { variant: 'error' }
       );
@@ -231,6 +258,17 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
     }
   };
 
+  // Check if form has errors or cargo exceeds capacity
+  const hasValidationErrors = 
+    Object.keys(errors).length > 0 || 
+    (selectedVehicle && cargoWeight > selectedVehicle.maxCapacity) ||
+    !vehicleId ||
+    !driverId ||
+    !watch('source') ||
+    !watch('destination') ||
+    !cargoWeight ||
+    !watch('plannedDistance');
+
   return (
     <Container sx={{ py: 4 }}>
       <Card sx={{ maxWidth: 600, mx: 'auto' }}>
@@ -238,6 +276,18 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
           <Typography variant="h5" align="center" mb={4}>
             {tripId ? 'Edit Trip' : 'Create New Trip'}
           </Typography>
+
+          {dataError && (
+            <Alert severity="error" sx={{ mb: 3 }}>
+              {dataError}
+            </Alert>
+          )}
+
+          {loadingData && (
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Loading vehicles and drivers...
+            </Alert>
+          )}
 
           <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <Stack spacing={3}>
@@ -268,7 +318,7 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
                   value={vehicleId}
                   onChange={(e) => {
                     setValue('vehicleId', e.target.value, { shouldValidate: true });
-                    const selected = mockVehicles.find(v => v.id === e.target.value);
+                    const selected = vehicles.find(v => v.id === e.target.value);
                     setSelectedVehicle(selected || null);
                   }}
                 >
@@ -347,7 +397,7 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
                   type="submit"
                   variant="contained"
                   color="primary"
-                  disabled={isLoading}
+                  disabled={isLoading || hasValidationErrors || loadingData}
                   sx={{ flex: 1 }}
                 >
                   {isLoading ? 'Saving...' : tripId ? 'Update Trip' : 'Create Trip'}

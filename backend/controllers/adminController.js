@@ -34,10 +34,22 @@ const getUsers = asyncHandler(async (req, res) => {
     order: [['createdAt', 'DESC']]
   });
 
+  // Transform users to include flat role property
+  const transformedUsers = users.map(user => ({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.roleInfo?.code ?? 'employee',
+    status: user.status,
+    lastLoginAt: user.lastLoginAt,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt
+  }));
+
   res.status(200).json({
     success: true,
-    count: users.length,
-    data: users
+    count: transformedUsers.length,
+    data: transformedUsers
   });
 });
 
@@ -57,7 +69,16 @@ const getUser = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    data: user
+    data: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.roleInfo?.code ?? 'employee',
+      status: user.status,
+      lastLoginAt: user.lastLoginAt,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    }
   });
 });
 
