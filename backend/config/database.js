@@ -24,11 +24,17 @@ const connectDB = async () => {
     await sequelize.authenticate();
     console.log('PostgreSQL connected successfully');
 
+    const { Role } = require('../models');
+
     // Sync models
     // In production, you would use migrations instead of sync
     if (process.env.NODE_ENV === 'development') {
       await sequelize.sync({ alter: true });
       console.log('Database synchronized');
+    }
+
+    if (Role && typeof Role.seedDefaultRoles === 'function') {
+      await Role.seedDefaultRoles();
     }
 
     return sequelize;
