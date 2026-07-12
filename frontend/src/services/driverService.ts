@@ -3,12 +3,12 @@ import api from './api';
 export interface Driver {
   id: string;
   name: string;
-  email: string;
-  phone: string;
   licenseNumber: string;
+  licenseCategory: 'A' | 'A1' | 'A2' | 'B' | 'B1' | 'C' | 'C1' | 'D' | 'D1' | 'E' | 'F' | 'G' | 'H' | 'other';
   licenseExpiry: string;
+  contact: string;
   safetyScore: number;
-  status: 'Active' | 'On Leave' | 'Suspended' | 'Terminated';
+  status: 'Available' | 'On Trip' | 'Suspended';
   createdAt: string;
   updatedAt: string;
 }
