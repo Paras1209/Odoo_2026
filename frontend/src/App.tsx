@@ -12,6 +12,9 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Profile from './pages/Profile';
+import TripList from './pages/trips/TripList';
+import TripForm from './components/trips/TripForm';
+import TripDetail from './pages/trips/TripDetail';
 
 // Layout
 import Navbar from './components/Navbar';
@@ -48,6 +51,12 @@ export default function App() {
                     {/* Protected */}
                     <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
                     <Route path="/" element={<RequireAuth><Profile /></RequireAuth>} />
+
+                    {/* Trip Management Routes */}
+                    <Route path="/trips" element={<RequireAuth><TripList /></RequireAuth>} />
+                    <Route path="/trips/new" element={<RequireAuth><TripForm /></RequireAuth>} />
+                    <Route path="/trips/:id" element={<RequireAuth><TripDetail /></RequireAuth>} />
+                    <Route path="/trips/:id/edit" element={<RequireAuth><TripForm /></RequireAuth>} />
 
                     {/* 404 */}
                     <Route

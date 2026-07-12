@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes, Sequelize } = require('sequelize');
 const sequelize = require('../config/database').sequelize;
 
 const Driver = sequelize.define('Driver', {
@@ -70,9 +70,9 @@ const Driver = sequelize.define('Driver', {
     }
   },
   status: {
-    type: DataTypes.ENUM('active', 'inactive', 'suspended', 'on_leave'),
+    type: DataTypes.ENUM('Available', 'On Trip', 'Suspended'),
     allowNull: false,
-    defaultValue: 'active'
+    defaultValue: 'Available'
   }
 }, {
   timestamps: true,
@@ -88,7 +88,22 @@ const Driver = sequelize.define('Driver', {
     {
       fields: ['licenseCategory']
     }
-  ]
+  ],
+  scopes: {
+    available: {
+      where: {
+        status: 'Available',
+        licenseExpiry: {
+          [Sequelize.Op.gt]: new Date()
+        }
+      }
+    }
+  }
 });
+
+// Associate with Trip model (will be set up in index.js)
+Driver.associate = (models) => {
+  Driver.hasMany(models.Trip, { foreignKey: 'driverId', as: 'trips' });
+};
 
 module.exports = Driver;
