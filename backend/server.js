@@ -37,6 +37,8 @@ app.use('/api/v1/drivers', require('./routes/driverRoutes'));
 app.use('/api/v1/maintenance', require('./routes/maintenanceRoutes'));
 app.use('/api/v1/trips', require('./routes/tripRoutes'));
 app.use('/api/v1/expenses', require('./routes/expenseRoutes'));
+app.use('/api/v1/trips', require('./routes/tripRoutes'));
+app.use('/api/v1/admin', require('./routes/adminRoutes'));
 
 // 404 handler
 app.use((req, res) => {

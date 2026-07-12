@@ -1,117 +1,139 @@
 const asyncHandler = require('express-async-handler');
 const Trip = require('../models/Trip');
 const Vehicle = require('../models/Vehicle');
+const Driver = require('../models/Driver');
+const { Op } = require('sequelize');
 
-const allowedTripStatuses = ['draft', 'dispatched', 'completed', 'cancelled'];
+// @desc    Get all trips with filtering and pagination
+// @route   GET /api/v1/trips
+// @access  Private
+const getAllTrips = asyncHandler(async (req, res) => {
+  const { source, destination, status, vehicleId, driverId, page = 1, limit = 10 } = req.query;
 
-const parseNumericValue = (value) => {
-  if (value === undefined || value === null || value === '') {
-    return value;
+  // Build filter object
+  const filter = {};
+
+  if (source) {
+    filter.source = { [Op.iLike]: `%${source}%` };
   }
 
-  const numericValue = Number(value);
-  return Number.isNaN(numericValue) ? value : numericValue;
-};
+  if (destination) {
+    filter.destination = { [Op.iLike]: `%${destination}%` };
+  }
 
-const validateStringField = (errors, value, fieldName, minLength, maxLength, required) => {
-  const stringValue = String(value || '').trim();
+  if (status) {
+    filter.status = status;
+  }
 
-  if (!stringValue) {
-    if (required) {
-      errors.push(`${fieldName} is required`);
+  if (vehicleId) {
+    filter.vehicleId = vehicleId;
+  }
+
+  if (driverId) {
+    filter.driverId = driverId;
+  }
+
+  // Parse pagination params
+  const pageNum = parseInt(page, 10);
+  const limitNum = parseInt(limit, 10);
+  const offset = (pageNum - 1) * limitNum;
+
+  // Get trips with pagination and include vehicle/driver details
+  const { count, rows } = await Trip.findAndCountAll({
+    where: filter,
+    include: [
+      { model: Vehicle, as: 'vehicle', attributes: ['registrationNumber', 'name', 'type', 'maxCapacity'] },
+      { model: Driver, as: 'driver', attributes: ['name', 'licenseNumber', 'safetyScore'] }
+    ],
+    limit: limitNum,
+    offset: offset,
+    order: [['createdAt', 'DESC']]
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      trips: rows,
+      pagination: {
+        total: count,
+        page: pageNum,
+        limit: limitNum,
+        pages: Math.ceil(count / limitNum)
+      }
     }
-    return;
-  }
-
-  if (stringValue.length < minLength || stringValue.length > maxLength) {
-    errors.push(`${fieldName} must be between ${minLength} and ${maxLength} characters`);
-  }
-};
-
-const validateNumericField = (errors, value, fieldName, minimum) => {
-  const numericValue = Number(value);
-
-  if (Number.isNaN(numericValue) || numericValue < minimum) {
-    errors.push(`${fieldName} must be a number greater than or equal to ${minimum}`);
-  }
-};
-
-const validateEnumField = (errors, value, fieldName, allowedValues) => {
-  if (!allowedValues.includes(value)) {
-    errors.push(`${fieldName} must be one of: ${allowedValues.join(', ')}`);
-  }
-};
-
-const validateTripPayload = (payload, isUpdate = false) => {
-  const errors = [];
-  const shouldValidate = (fieldName) => !isUpdate || payload[fieldName] !== undefined;
-
-  if (shouldValidate('source')) {
-    validateStringField(errors, payload.source, 'source', 2, 120, true);
-  }
-
-  if (shouldValidate('destination')) {
-    validateStringField(errors, payload.destination, 'destination', 2, 120, true);
-  }
-
-  if (shouldValidate('vehicleId')) {
-    validateStringField(errors, payload.vehicleId, 'vehicleId', 1, 100, true);
-  }
-
-  if (shouldValidate('cargoWeight')) {
-    validateNumericField(errors, payload.cargoWeight, 'cargoWeight', 0);
-  }
-
-  if (shouldValidate('plannedDistance')) {
-    validateNumericField(errors, payload.plannedDistance, 'plannedDistance', 0);
-  }
-
-  if (shouldValidate('actualDistance') && payload.actualDistance !== undefined && payload.actualDistance !== null && payload.actualDistance !== '') {
-    validateNumericField(errors, payload.actualDistance, 'actualDistance', 0);
-  }
-
-  if (shouldValidate('fuelConsumed') && payload.fuelConsumed !== undefined && payload.fuelConsumed !== null && payload.fuelConsumed !== '') {
-    validateNumericField(errors, payload.fuelConsumed, 'fuelConsumed', 0);
-  }
-
-  if (shouldValidate('status')) {
-    validateEnumField(errors, payload.status, 'status', allowedTripStatuses);
-  }
-
-  return errors;
-};
-
-const normalizeTripPayload = (payload) => ({
-  source: payload.source?.trim(),
-  destination: payload.destination?.trim(),
-  vehicleId: payload.vehicleId?.trim(),
-  cargoWeight: parseNumericValue(payload.cargoWeight),
-  plannedDistance: parseNumericValue(payload.plannedDistance),
-  actualDistance: parseNumericValue(payload.actualDistance),
-  fuelConsumed: parseNumericValue(payload.fuelConsumed),
-  status: payload.status,
-  startedAt: payload.startedAt || null,
-  endedAt: payload.endedAt || null
+  });
 });
 
-const includeVehicle = [{ model: Vehicle, as: 'vehicle' }];
+// @desc    Get single trip by ID
+// @route   GET /api/v1/trips/:id
+// @access  Private
+const getTripById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
 
-const createTrip = asyncHandler(async (req, res) => {
-  const errors = validateTripPayload(req.body);
+  const trip = await Trip.findByPk(id, {
+    include: [
+      { model: Vehicle, as: 'vehicle' },
+      { model: Driver, as: 'driver' }
+    ]
+  });
 
-  if (errors.length > 0) {
-    res.status(400);
-    throw new Error(errors.join('; '));
+  if (!trip) {
+    res.status(404);
+    throw new Error('Trip not found');
   }
 
-  const vehicle = await Vehicle.findByPk(req.body.vehicleId);
+  res.status(200).json({
+    success: true,
+    data: trip
+  });
+});
 
+// @desc    Create new trip
+// @route   POST /api/v1/trips
+// @access  Private
+const createTrip = asyncHandler(async (req, res) => {
+  const { source, destination, vehicleId, driverId, cargoWeight, plannedDistance } = req.body;
+
+  // Validate required fields
+  if (!source || !destination || !vehicleId || !driverId || !cargoWeight || !plannedDistance) {
+    res.status(400);
+    throw new Error('Please provide all required fields');
+  }
+
+  // Validate numeric fields
+  if (parseFloat(cargoWeight) <= 0) {
+    res.status(400);
+    throw new Error('Cargo weight must be greater than 0');
+  }
+
+  if (parseFloat(plannedDistance) <= 0) {
+    res.status(400);
+    throw new Error('Planned distance must be greater than 0');
+  }
+
+  // Check if vehicle exists
+  const vehicle = await Vehicle.findByPk(vehicleId);
   if (!vehicle) {
     res.status(404);
     throw new Error('Vehicle not found');
   }
 
-  const trip = await Trip.create(normalizeTripPayload(req.body));
+  // Check if driver exists
+  const driver = await Driver.findByPk(driverId);
+  if (!driver) {
+    res.status(404);
+    throw new Error('Driver not found');
+  }
+
+  // Create trip
+  const trip = await Trip.create({
+    source,
+    destination,
+    vehicleId,
+    driverId,
+    cargoWeight,
+    plannedDistance
+  });
 
   res.status(201).json({
     success: true,
@@ -119,71 +141,73 @@ const createTrip = asyncHandler(async (req, res) => {
   });
 });
 
-const getTrips = asyncHandler(async (req, res) => {
-  const trips = await Trip.findAll({ include: includeVehicle, order: [['createdAt', 'DESC']] });
-
-  res.status(200).json({
-    success: true,
-    count: trips.length,
-    data: trips
-  });
-});
-
-const getTrip = asyncHandler(async (req, res) => {
-  const trip = await Trip.findByPk(req.params.id, { include: includeVehicle });
-
-  if (!trip) {
-    res.status(404);
-    throw new Error('Trip not found');
-  }
-
-  res.status(200).json({
-    success: true,
-    data: trip
-  });
-});
-
+// @desc    Update trip
+// @route   PUT /api/v1/trips/:id
+// @access  Private
 const updateTrip = asyncHandler(async (req, res) => {
-  const trip = await Trip.findByPk(req.params.id);
+  const { id } = req.params;
+  const { source, destination, vehicleId, driverId, cargoWeight, plannedDistance } = req.body;
+
+  // Find trip
+  const trip = await Trip.findByPk(id);
 
   if (!trip) {
     res.status(404);
     throw new Error('Trip not found');
   }
 
-  const errors = validateTripPayload(req.body, true);
-
-  if (errors.length > 0) {
-    res.status(400);
-    throw new Error(errors.join('; '));
+  // Only allow updates for draft trips
+  if (trip.status !== 'draft') {
+    res.status(409);
+    throw new Error('Only draft trips can be updated');
   }
 
-  const updateField = (fieldName, transform = (value) => value) => {
-    if (req.body[fieldName] !== undefined) {
-      trip[fieldName] = transform(req.body[fieldName]);
+  // Validate required fields if provided
+  if (source !== undefined) trip.source = source;
+  if (destination !== undefined) trip.destination = destination;
+  if (vehicleId !== undefined) trip.vehicleId = vehicleId;
+  if (driverId !== undefined) trip.driverId = driverId;
+  if (cargoWeight !== undefined) {
+    if (parseFloat(cargoWeight) <= 0) {
+      res.status(400);
+      throw new Error('Cargo weight must be greater than 0');
     }
-  };
+    trip.cargoWeight = cargoWeight;
+  }
+  if (plannedDistance !== undefined) {
+    if (parseFloat(plannedDistance) <= 0) {
+      res.status(400);
+      throw new Error('Planned distance must be greater than 0');
+    }
+    trip.plannedDistance = plannedDistance;
+  }
 
-  if (req.body.vehicleId !== undefined) {
-    const vehicle = await Vehicle.findByPk(req.body.vehicleId.trim());
+  // Validate vehicle and driver if changed
+  if (vehicleId !== undefined) {
+    const vehicle = await Vehicle.findByPk(vehicleId);
     if (!vehicle) {
       res.status(404);
       throw new Error('Vehicle not found');
     }
   }
 
-  updateField('source', (value) => value.trim());
-  updateField('destination', (value) => value.trim());
-  updateField('vehicleId', (value) => value.trim());
-  updateField('cargoWeight', parseNumericValue);
-  updateField('plannedDistance', parseNumericValue);
-  updateField('actualDistance', parseNumericValue);
-  updateField('fuelConsumed', parseNumericValue);
-  updateField('status');
-  updateField('startedAt');
-  updateField('endedAt');
+  if (driverId !== undefined) {
+    const driver = await Driver.findByPk(driverId);
+    if (!driver) {
+      res.status(404);
+      throw new Error('Driver not found');
+    }
+  }
 
-  const updatedTrip = await trip.save();
+  await trip.save();
+
+  // Get updated trip with vehicle/driver details
+  const updatedTrip = await Trip.findByPk(id, {
+    include: [
+      { model: Vehicle, as: 'vehicle' },
+      { model: Driver, as: 'driver' }
+    ]
+  });
 
   res.status(200).json({
     success: true,
@@ -191,27 +215,141 @@ const updateTrip = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Delete trip
+// @route   DELETE /api/v1/trips/:id
+// @access  Private
 const deleteTrip = asyncHandler(async (req, res) => {
-  const trip = await Trip.findByPk(req.params.id);
+  const { id } = req.params;
+
+  // Find trip
+  const trip = await Trip.findByPk(id);
 
   if (!trip) {
     res.status(404);
     throw new Error('Trip not found');
   }
 
+  // Only allow deletion of draft or cancelled trips
+  if (trip.status !== 'draft' && trip.status !== 'cancelled') {
+    res.status(409);
+    throw new Error('Only draft or cancelled trips can be deleted');
+  }
+
   await trip.destroy();
+
+  res.status(204).json({
+    success: true,
+    data: null
+  });
+});
+
+// @desc    Dispatch trip
+// @route   POST /api/v1/trips/:id/dispatch
+// @access  Private
+const dispatchTrip = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Find trip
+  const trip = await Trip.findByPk(id);
+
+  if (!trip) {
+    res.status(404);
+    throw new Error('Trip not found');
+  }
+
+  // Dispatch trip using model method
+  const dispatchedTrip = await trip.dispatch();
+
+  // Get updated trip with vehicle/driver details
+  const result = await Trip.findByPk(id, {
+    include: [
+      { model: Vehicle, as: 'vehicle' },
+      { model: Driver, as: 'driver' }
+    ]
+  });
 
   res.status(200).json({
     success: true,
-    message: 'Trip deleted successfully'
+    data: result
+  });
+});
+
+// @desc    Complete trip
+// @route   POST /api/v1/trips/:id/complete
+// @access  Private
+const completeTrip = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { actualDistance, fuelConsumed } = req.body;
+
+  // Validate required fields
+  if (actualDistance === undefined || fuelConsumed === undefined) {
+    res.status(400);
+    throw new Error('Please provide actual distance and fuel consumed');
+  }
+
+  // Find trip
+  const trip = await Trip.findByPk(id);
+
+  if (!trip) {
+    res.status(404);
+    throw new Error('Trip not found');
+  }
+
+  // Complete trip using model method
+  const completedTrip = await trip.complete(parseFloat(actualDistance), parseFloat(fuelConsumed));
+
+  // Get updated trip with vehicle/driver details
+  const result = await Trip.findByPk(id, {
+    include: [
+      { model: Vehicle, as: 'vehicle' },
+      { model: Driver, as: 'driver' }
+    ]
+  });
+
+  res.status(200).json({
+    success: true,
+    data: result
+  });
+});
+
+// @desc    Cancel trip
+// @route   POST /api/v1/trips/:id/cancel
+// @access  Private
+const cancelTrip = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Find trip
+  const trip = await Trip.findByPk(id);
+
+  if (!trip) {
+    res.status(404);
+    throw new Error('Trip not found');
+  }
+
+  // Cancel trip using model method
+  const cancelledTrip = await trip.cancel();
+
+  // Get updated trip with vehicle/driver details
+  const result = await Trip.findByPk(id, {
+    include: [
+      { model: Vehicle, as: 'vehicle' },
+      { model: Driver, as: 'driver' }
+    ]
+  });
+
+  res.status(200).json({
+    success: true,
+    data: result
   });
 });
 
 module.exports = {
+  getAllTrips,
+  getTripById,
   createTrip,
-  getTrips,
-  getTrip,
   updateTrip,
   deleteTrip,
-  validateTripPayload
+  dispatchTrip,
+  completeTrip,
+  cancelTrip
 };

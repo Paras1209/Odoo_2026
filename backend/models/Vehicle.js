@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes, Sequelize } = require('sequelize');
 const sequelize = require('../config/database').sequelize;
 
 const Vehicle = sequelize.define('Vehicle', {
@@ -71,9 +71,9 @@ const Vehicle = sequelize.define('Vehicle', {
     }
   },
   status: {
-    type: DataTypes.ENUM('available', 'on_trip', 'in_shop', 'retired'),
+    type: DataTypes.ENUM('Available', 'On Trip', 'In Shop', 'Retired'),
     allowNull: false,
-    defaultValue: 'available'
+    defaultValue: 'Available'
   }
 }, {
   timestamps: true,
@@ -89,7 +89,19 @@ const Vehicle = sequelize.define('Vehicle', {
     {
       fields: ['type']
     }
-  ]
+  ],
+  scopes: {
+    available: {
+      where: {
+        status: 'Available'
+      }
+    }
+  }
 });
+
+// Associate with Trip model (will be set up in index.js)
+Vehicle.associate = (models) => {
+  Vehicle.hasMany(models.Trip, { foreignKey: 'vehicleId', as: 'trips' });
+};
 
 module.exports = Vehicle;

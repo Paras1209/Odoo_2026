@@ -34,18 +34,18 @@ const User = sequelize.define('User', {
   },
   roleId: {
     type: DataTypes.UUID,
-    allowNull: false,
+    allowNull: true,
     references: {
       model: 'roles',
       key: 'id'
     },
     onUpdate: 'CASCADE',
-    onDelete: 'RESTRICT'
+    onDelete: 'SET NULL'
   },
   status: {
-    type: DataTypes.ENUM('active', 'inactive', 'suspended'),
+    type: DataTypes.ENUM('active', 'inactive', 'suspended', 'pending'),
     allowNull: false,
-    defaultValue: 'active'
+    defaultValue: 'pending'
   },
   lastLoginAt: {
     type: DataTypes.DATE,
