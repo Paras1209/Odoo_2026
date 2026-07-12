@@ -7,6 +7,7 @@ const filesToValidate = [
   'config/database.js',
   'models/User.js',
   'models/Vehicle.js',
+  'models/Driver.js',
   'controllers/authController.js',
   'routes/authRoutes.js',
   'middleware/auth.js',
