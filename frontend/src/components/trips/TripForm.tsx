@@ -4,39 +4,23 @@ import {
   Button,
   Card,
   CardContent,
-  CircularProgress,
   Container,
   TextField,
   Select,
   MenuItem,
   Stack,
   Typography,
-  Tooltip,
+  FormControl,
+  InputLabel,
+  FormHelperText,
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useForm, SubmitHandler, UseFormHandle } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
-import * as Yup from 'yup';
+import { useForm, SubmitHandler } from 'react-hook-form';
 import tripService from '../../services/tripService';
 import { TripFormData, Trip } from '../../types/trip';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '../../contexts/AuthContext';
-
-const tripFormSchema = Yup.object({
-  source: Yup.string().required('Source is required'),
-  destination: Yup.string().required('Destination is required'),
-  vehicleId: Yup.string().required('Vehicle is required'),
-  driverId: Yup.string().required('Driver is required'),
-  cargoWeight: Yup.number()
-    .typeError('Cargo weight must be a number')
-    .positive('Cargo weight must be greater than 0')
-    .required('Cargo weight is required'),
-  plannedDistance: Yup.number()
-    .typeError('Planned distance must be a number')
-    .positive('Planned distance must be greater than 0')
-    .required('Planned distance is required'),
-});
 
 type TripFormProps = {
   onSuccess?: () => void;
@@ -59,7 +43,7 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
     }
 
     // Check permissions based on role
-    const userRole = user.role?.code;
+    const userRole = user.role;
 
     // Admin and Fleet Manager have full access
     if (userRole === 'admin' || userRole === 'fleet_manager') {
@@ -82,20 +66,24 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
     // Redirect to trips list
     navigate('/trips');
   }, [navigate, tripId, user]);
+  
   const [vehicleOptions, setVehicleOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [driverOptions, setDriverOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<any>(null);
-  const [selectedDriver, setSelectedDriver] = useState<any>(null);
+  const [mockVehicles] = useState([
+    { id: '1', registrationNumber: 'ABC-123', name: 'Truck A', type: 'truck', maxCapacity: 10000 },
+    { id: '2', registrationNumber: 'XYZ-789', name: 'Van B', type: 'van', maxCapacity: 3000 },
+    { id: '3', registrationNumber: 'DEF-456', name: 'Bus C', type: 'bus', maxCapacity: 50 },
+  ]);
 
   const {
     register,
     handleSubmit,
-    formState: { errors, isValid },
+    formState: { errors },
     reset,
     setValue,
     watch,
   } = useForm<TripFormData>({
-    resolver: yupResolver(tripFormSchema),
     defaultValues: {
       source: '',
       destination: '',
@@ -104,18 +92,19 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
       cargoWeight: 0,
       plannedDistance: 0,
     },
+    mode: 'onChange',
   });
 
   // For drivers, automatically set themselves as the driver when creating a new trip
   React.useEffect(() => {
-    if (!tripId && user?.role?.code === 'driver') {
+    if (!tripId && user?.role === 'driver') {
       setValue('driverId', user.id);
     }
   }, [tripId, user, setValue]);
 
   // For drivers, prevent changing the driverId when editing (they can only edit their own trips)
   React.useEffect(() => {
-    if (tripId && user?.role?.code === 'driver') {
+    if (tripId && user?.role === 'driver') {
       // This would ideally be validated in the useEffect that fetches tripData
       // But we can also warn the user if they try to change it
       const driverId = watch('driverId');
@@ -129,19 +118,17 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
   // Watch for vehicle/driver changes to update validation
   const vehicleId = watch('vehicleId');
   const driverId = watch('driverId');
+  const cargoWeight = watch('cargoWeight');
 
   // Load trip data if editing
   const {
     data: tripData,
-    isLoading: isLoadingTrip
-  } = useQuery<Trip, Error>(
-    tripId ? ['trip', tripId] : [],
-    () => tripService.getTripById(tripId!),
-    {
-      enabled: !!tripId,
-      retry: false,
-    }
-  );
+  } = useQuery<Trip, Error>({
+    queryKey: tripId ? ['trip', tripId] : [],
+    queryFn: () => tripService.getTripById(tripId!).then(res => res.data),
+    enabled: !!tripId,
+    retry: false,
+  });
 
   // Initialize form with trip data when editing
   useEffect(() => {
@@ -170,20 +157,12 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
           value: tripData.driverId,
           label: `${tripData.driver.name} - ${tripData.driver.licenseNumber}`
         }]);
-        setSelectedDriver(tripData.driver);
       }
     }
   }, [tripData, tripId, reset]);
 
   // Simulate fetching vehicles and drivers (in a real app, these would come from API calls)
   useEffect(() => {
-    // Mock vehicle data
-    const mockVehicles = [
-      { id: '1', registrationNumber: 'ABC-123', name: 'Truck A', type: 'truck', maxCapacity: 10000 },
-      { id: '2', registrationNumber: 'XYZ-789', name: 'Van B', type: 'van', maxCapacity: 3000 },
-      { id: '3', registrationNumber: 'DEF-456', name: 'Bus C', type: 'bus', maxCapacity: 50 },
-    ];
-
     setVehicleOptions(
       mockVehicles.map(v => ({
         value: v.id,
@@ -204,9 +183,19 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
         label: `${d.name} - ${d.licenseNumber}`
       }))
     );
-  }, []);
+  }, [mockVehicles]);
 
   const onSubmit: SubmitHandler<TripFormData> = async (data) => {
+    // Validate required fields
+    if (!data.vehicleId) {
+      enqueueSnackbar('Please select a vehicle', { variant: 'error' });
+      return;
+    }
+    if (!data.driverId) {
+      enqueueSnackbar('Please select a driver', { variant: 'error' });
+      return;
+    }
+
     setIsLoading(true);
     try {
       if (tripId) {
@@ -255,7 +244,7 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
               <TextField
                 label="Source"
                 placeholder="Enter starting location"
-                {...register('source')}
+                {...register('source', { required: 'Source is required' })}
                 error={!!errors.source}
                 helperText={errors.source?.message}
                 sx={{ width: '100%' }}
@@ -264,61 +253,63 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
               <TextField
                 label="Destination"
                 placeholder="Enter ending location"
-                {...register('destination')}
+                {...register('destination', { required: 'Destination is required' })}
                 error={!!errors.destination}
                 helperText={errors.destination?.message}
                 sx={{ width: '100%' }}
               />
 
-              <Select
-                label="Vehicle"
-                labelId="vehicle-label"
-                id="vehicle-select"
-                value={vehicleId}
-                onChange={(e) => setValue('vehicleId', e.target.value)}
-                {...register('vehicleId')}
-                error={!!errors.vehicleId}
-                helperText={errors.vehicleId?.message}
-                sx={{ width: '100%' }}
-                MenuProps={{ sx: { width: 260 } }}
-              >
-                <MenuItem value="">
-                  <!-- -->Select a vehicle<!-- -->
-                </MenuItem>
-                {vehicleOptions.map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
+              <FormControl fullWidth error={!!errors.vehicleId}>
+                <InputLabel id="vehicle-label">Vehicle</InputLabel>
+                <Select
+                  labelId="vehicle-label"
+                  id="vehicle-select"
+                  label="Vehicle"
+                  value={vehicleId}
+                  onChange={(e) => {
+                    setValue('vehicleId', e.target.value, { shouldValidate: true });
+                    const selected = mockVehicles.find(v => v.id === e.target.value);
+                    setSelectedVehicle(selected || null);
+                  }}
+                >
+                  <MenuItem value="">Select a vehicle</MenuItem>
+                  {vehicleOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.vehicleId && <FormHelperText>{errors.vehicleId.message}</FormHelperText>}
+              </FormControl>
 
-              <Select
-                label="Driver"
-                labelId="driver-label"
-                id="driver-select"
-                value={driverId}
-                onChange={(e) => setValue('driverId', e.target.value)}
-                {...register('driverId')}
-                error={!!errors.driverId}
-                helperText={errors.driverId?.message}
-                sx={{ width: '100%' }}
-                MenuProps={{ sx: { width: 260 } }}
-              >
-                <MenuItem value="">
-                  <!-- -->Select a driver<!-- -->
-                </MenuItem>
-                {driverOptions.map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
+              <FormControl fullWidth error={!!errors.driverId}>
+                <InputLabel id="driver-label">Driver</InputLabel>
+                <Select
+                  labelId="driver-label"
+                  id="driver-select"
+                  label="Driver"
+                  value={driverId}
+                  onChange={(e) => setValue('driverId', e.target.value, { shouldValidate: true })}
+                >
+                  <MenuItem value="">Select a driver</MenuItem>
+                  {driverOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.driverId && <FormHelperText>{errors.driverId.message}</FormHelperText>}
+              </FormControl>
 
               <TextField
                 label="Cargo Weight (kg)"
                 type="number"
-                inputProps={{ min: 0.1, step: 0.1 }}
-                {...register('cargoWeight')}
+                slotProps={{ htmlInput: { min: 0.1, step: 0.1 } }}
+                {...register('cargoWeight', { 
+                  required: 'Cargo weight is required',
+                  valueAsNumber: true,
+                  min: { value: 0.1, message: 'Cargo weight must be greater than 0' }
+                })}
                 error={!!errors.cargoWeight}
                 helperText={errors.cargoWeight?.message}
                 sx={{ width: '100%' }}
@@ -327,8 +318,12 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
               <TextField
                 label="Planned Distance (km)"
                 type="number"
-                inputProps={{ min: 0.1, step: 0.1 }}
-                {...register('plannedDistance')}
+                slotProps={{ htmlInput: { min: 0.1, step: 0.1 } }}
+                {...register('plannedDistance', { 
+                  required: 'Planned distance is required',
+                  valueAsNumber: true,
+                  min: { value: 0.1, message: 'Planned distance must be greater than 0' }
+                })}
                 error={!!errors.plannedDistance}
                 helperText={errors.plannedDistance?.message}
                 sx={{ width: '100%' }}
@@ -339,7 +334,7 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
                   <Typography variant="body2" color="text.secondary">
                     Selected Vehicle Capacity: {selectedVehicle.maxCapacity} kg
                   </Typography>
-                  {parseFloat(watch('cargoWeight') || '0') > parseFloat(selectedVehicle.maxCapacity || '0') && (
+                  {(cargoWeight || 0) > (selectedVehicle.maxCapacity || 0) && (
                     <Typography variant="body2" color="error">
                       Warning: Cargo weight exceeds vehicle capacity!
                     </Typography>
@@ -352,7 +347,7 @@ const TripForm: React.FC<TripFormProps> = ({ onSuccess }) => {
                   type="submit"
                   variant="contained"
                   color="primary"
-                  disabled={isLoading || !isValid}
+                  disabled={isLoading}
                   sx={{ flex: 1 }}
                 >
                   {isLoading ? 'Saving...' : tripId ? 'Update Trip' : 'Create Trip'}

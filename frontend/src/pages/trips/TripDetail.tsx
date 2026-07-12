@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Button,
@@ -8,21 +8,23 @@ import {
   Chip,
   CircularProgress,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Stack,
-  Typography,
+  TextField,
   Tooltip,
-  useTheme,
+  Typography,
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Delete, Edit, Person, LocalDrink, Scale, LocationOn, DirectionsCar, Schedule, AccessTime } from '@mui/icons-material';
+import { Delete, Edit } from '@mui/icons-material';
 import tripService from '../../services/tripService';
 import { Trip } from '../../types/trip';
 import { useSnackbar } from 'notistack';
 import { useAuth } from '../../contexts/AuthContext';
-import { Dialog, DialogActions, DialogContent, DialogTitle, TextField } from '@mui/material';
-import { useState } from 'react';
 
 const TripDetail: React.FC = () => {
   const { tripId } = useParams<{ tripId?: string }>();
@@ -42,7 +44,7 @@ const TripDetail: React.FC = () => {
     }
 
     // Check permissions based on role
-    const userRole = user.role?.code;
+    const userRole = user.role;
 
     // Admin and Fleet Manager have full access
     if (userRole === 'admin' || userRole === 'fleet_manager') {
@@ -57,18 +59,17 @@ const TripDetail: React.FC = () => {
 
     // All other roles (safety_officer, financial_analyst, employee) have view-only access
     // They can view all trips, so no redirect needed
-    return;
   }, [navigate, tripId, user]);
 
   const {
     data: trip,
     isLoading,
     error
-  } = useQuery<Trip, Error>(
-    tripId ? ['trip', tripId, user?.role?.code === 'driver' ? user.id : null] : [],
-    () => tripService.getTripById(tripId!).then(response => {
+  } = useQuery<Trip, Error>({
+    queryKey: tripId ? ['trip', tripId, user?.role === 'driver' ? user.id : null] : [],
+    queryFn: () => tripService.getTripById(tripId!).then(response => {
       // Check if driver is trying to access a trip that doesn't belong to them
-      if (user?.role?.code === 'driver' && response.data.driverId !== user.id) {
+      if (user?.role === 'driver' && response.data.driverId !== user.id) {
         // Redirect to trips list with an error message
         navigate('/trips');
         // In a real app, we might show a toast or error message
@@ -76,11 +77,9 @@ const TripDetail: React.FC = () => {
       }
       return response.data;
     }),
-    {
-      enabled: !!tripId,
-      retry: false,
-    }
-  );
+    enabled: !!tripId,
+    retry: false,
+  });
 
   const handleCompleteTrip = async () => {
     if (!tripId) return;
@@ -107,7 +106,7 @@ const TripDetail: React.FC = () => {
       setActualDistance('');
       setFuelConsumed('');
       // Refetch trip data
-      await window.location.reload();
+      window.location.reload();
     } catch (err: any) {
       enqueueSnackbar(
         err.response?.data?.error?.message ||
@@ -124,7 +123,7 @@ const TripDetail: React.FC = () => {
       await tripService.cancelTrip(tripId);
       enqueueSnackbar('Trip cancelled successfully', { variant: 'success' });
       // Refetch trip data
-      await window.location.reload();
+      window.location.reload();
     } catch (err: any) {
       enqueueSnackbar(
         err.response?.data?.error?.message ||
@@ -171,374 +170,360 @@ const TripDetail: React.FC = () => {
     );
   }
 
-  const statusColor: Record<string, string> = {
-    draft: 'grey',
-    dispatched: 'info.main',
-    completed: 'success.main',
-    cancelled: 'error.main',
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'draft': return 'default';
+      case 'dispatched': return 'info';
+      case 'completed': return 'success';
+      case 'cancelled': return 'error';
+      default: return 'default';
+    }
   };
 
   return (
-    <Container sx={{ py: 4 }}>
-      <Card>
-        <CardHeader
-          title={`Trip #${trip.id.substring(0, 8)}`}
-          subheader={
-            <Chip
-              label={trip.status.toUpperCase()}
-              sx={{ backgroundColor: (theme) =>
-                theme.palette.mode === 'dark'
-                  ? theme.palette[statusColor[trip.status] as keyof typeof statusCode]?.main || '#fff'
-                  : theme.palette[statusCode[trip.status] as keyof typeof statusCode]?.main || '#fff',
-                color: (theme) =>
-                  theme.palette.mode === 'dark'
-                    ? '#fff'
-                    : 'white'
-              }}
-            />
-          }
-          action={
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              {trip.status === 'draft' && (
-                <Tooltip title="Edit Trip">
-                  <ButtonVariant name="&#34;outlined&#34; size=&#34;small&#34; onClick={() ="> navigate(`/trips/${trip.id}/edit`)}>
-                    <Edit fontSize="small" />
-                  </Button>
+    <>
+      <Container sx={{ py: 4 }}>
+        <Card>
+          <CardHeader
+            title={`Trip #${trip.id.substring(0, 8)}`}
+            subheader={
+              <Chip
+                label={trip.status.toUpperCase()}
+                color={getStatusColor(trip.status) as any}
+                sx={{ mt: 1 }}
+              />
+            }
+            action={
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                {trip.status === 'draft' && (
+                  <Tooltip title="Edit Trip">
+                    <Button variant="outlined" size="small" onClick={() => navigate(`/trips/${trip.id}/edit`)}>
+                      <Edit fontSize="small" />
+                    </Button>
+                  </Tooltip>
                 )}
-              </Tooltip>
-            )}
-            {trip.status === 'draft' || trip.status === 'dispatched' && (
-              <Tooltip title="Cancel Trip">
-                <ButtonVariant name="&#34;outlined&#34; size=&#34;small&#34; color=&#34;error&#34; onClick={handleCancelTrip}">
-                  <Delete fontSize="small" />
-                </Button>
-              </Tooltip>
-            )}
-          </Box>
-          }
-        />
-      </CardHeader>
+                {(trip.status === 'draft' || trip.status === 'dispatched') && (
+                  <Tooltip title="Cancel Trip">
+                    <Button variant="outlined" size="small" color="error" onClick={handleCancelTrip}>
+                      <Delete fontSize="small" />
+                    </Button>
+                  </Tooltip>
+                )}
+              </Box>
+            }
+          />
 
-      <CardContent>
-        <Divider sx={{ my: 3 }} />
+          <CardContent>
+            <Divider sx={{ my: 3 }} />
 
-        {/* Route Information */}
-        <Stack spacing={2}>
-          <Typography variant="h6">Route Information</Typography>
-          <Divider sx={{ my: 1 }} />
+            {/* Route Information */}
+            <Stack spacing={2}>
+              <Typography variant="h6">Route Information</Typography>
+              <Divider sx={{ my: 1 }} />
 
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body1"><strong>Source:</strong></Typography>
-            <Typography variant="body1">{trip.source}</Typography>
-          </Box>
-
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body1"><strong>Destination:</strong></Typography>
-            <Typography variant="body1">{trip.destination}</Typography>
-          </Box>
-
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body1"><strong>Planned Distance:</strong></Typography>
-            <Typography variant="body1">{trip.plannedDistance} km</Typography>
-          </Box>
-
-          {trip.actualDistance !== undefined && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body1"><strong>Actual Distance:</strong></Typography>
-              <Typography variant="body1">{trip.actualDistance} km</Typography>
-            </Box>
-          )}
-        </Stack>
-
-        <Divider sx={{ my: 3 }} />
-
-        {/* Vehicle Information */}
-        <Stack spacing={2}>
-          <Typography variant="h6">Vehicle Information</Typography>
-          <Divider sx={{ my: 1 }} />
-
-          {trip.vehicle ? (
-            <>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body1"><strong>Vehicle:</strong></Typography>
-                <Typography variant="body1">
-                  {trip.vehicle.registrationNumber} - {trip.vehicle.name} ({trip.vehicle.type})
+                <Typography variant="body1"><strong>Source:</strong></Typography>
+                <Typography variant="body1">{trip.source}</Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="body1"><strong>Destination:</strong></Typography>
+                <Typography variant="body1">{trip.destination}</Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="body1"><strong>Planned Distance:</strong></Typography>
+                <Typography variant="body1">{trip.plannedDistance} km</Typography>
+              </Box>
+
+              {trip.actualDistance !== undefined && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body1"><strong>Actual Distance:</strong></Typography>
+                  <Typography variant="body1">{trip.actualDistance} km</Typography>
+                </Box>
+              )}
+            </Stack>
+
+            <Divider sx={{ my: 3 }} />
+
+            {/* Vehicle Information */}
+            <Stack spacing={2}>
+              <Typography variant="h6">Vehicle Information</Typography>
+              <Divider sx={{ my: 1 }} />
+
+              {trip.vehicle ? (
+                <>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body1"><strong>Vehicle:</strong></Typography>
+                    <Typography variant="body1">
+                      {trip.vehicle.registrationNumber} - {trip.vehicle.name} ({trip.vehicle.type})
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body1"><strong>Max Capacity:</strong></Typography>
+                    <Typography variant="body1">{trip.vehicle.maxCapacity} kg</Typography>
+                  </Box>
+                </>
+              ) : (
+                <Typography variant="body1" color="text.secondary">
+                  Vehicle information not available
                 </Typography>
-              </Box>
+              )}
+            </Stack>
 
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body1"><strong>Max Capacity:</strong></Typography>
-                <Typography variant="body1">{trip.vehicle.maxCapacity} kg</Typography>
-              </Box>
+            <Divider sx={{ my: 3 }} />
 
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body1"><strong>Current Odometer:</strong></Typography>
-                <Typography variant="body1">{trip.vehicle.odometer ?? 0} km</Typography>
-              </Box>
-            </>
-          ) : (
-            <Typography variant="body1" color="text.secondary">
-              Vehicle information not available
-            </Typography>
-          )}
-        </Stack>
+            {/* Driver Information */}
+            <Stack spacing={2}>
+              <Typography variant="h6">Driver Information</Typography>
+              <Divider sx={{ my: 1 }} />
 
-        <Divider sx={{ my: 3 }} />
+              {trip.driver ? (
+                <>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body1"><strong>Driver:</strong></Typography>
+                    <Typography variant="body1">
+                      {trip.driver.name} - {trip.driver.licenseNumber}
+                    </Typography>
+                  </Box>
 
-        {/* Driver Information */}
-        <Stack spacing={2}>
-          <Typography variant="h6">Driver Information</Typography>
-          <Divider sx={{ my: 1 }} />
-
-          {trip.driver ? (
-            <>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body1"><strong>Driver:</strong></Typography>
-                <Typography variant="body1">
-                  {trip.driver.name} - {trip.driver.licenseNumber}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="body1"><strong>Safety Score:</strong></Typography>
+                    <Typography variant="body1">{trip.driver.safetyScore} / 100</Typography>
+                  </Box>
+                </>
+              ) : (
+                <Typography variant="body1" color="text.secondary">
+                  Driver information not available
                 </Typography>
+              )}
+            </Stack>
+
+            <Divider sx={{ my: 3 }} />
+
+            {/* Cargo Information */}
+            <Stack spacing={2}>
+              <Typography variant="h6">Cargo Information</Typography>
+              <Divider sx={{ my: 1 }} />
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="body1"><strong>Weight:</strong></Typography>
+                <Typography variant="body1">{trip.cargoWeight} kg</Typography>
               </Box>
 
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body1"><strong>Safety Score:</strong></Typography>
-                <Typography variant="body1">{trip.driver.safetyScore} / 100</Typography>
+                <Typography variant="body1"><strong>Planned Distance:</strong></Typography>
+                <Typography variant="body1">{trip.plannedDistance} km</Typography>
               </Box>
-            </>
-          ) : (
-            <Typography variant="body1" color="text.secondary">
-              Driver information not available
-            </Typography>
-          )}
-        </Stack>
 
-        <Divider sx={{ my: 3 }} />
+              {trip.actualDistance !== undefined && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body1"><strong>Actual Distance:</strong></Typography>
+                  <Typography variant="body1">{trip.actualDistance} km</Typography>
+                </Box>
+              )}
 
-        {/* Cargo Information */}
-        <Stack spacing={2}>
-          <Typography variant="h6">Cargo Information</Typography>
-          <Divider sx={{ my: 1 }} />
+              {trip.fuelConsumed !== undefined && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body1"><strong>Fuel Consumed:</strong></Typography>
+                  <Typography variant="body1">{trip.fuelConsumed} L</Typography>
+                </Box>
+              )}
+            </Stack>
 
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body1"><strong>Weight:</strong></Typography>
-            <Typography variant="body1">{trip.cargoWeight} kg</Typography>
-          </Box>
+            <Divider sx={{ my: 3 }} />
 
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body1"><strong>Planned Distance:</strong></Typography>
-            <Typography variant="body1">{trip.plannedDistance} km</Typography>
-          </Box>
+            {/* Timestamps */}
+            <Stack spacing={2}>
+              <Typography variant="h6">Timestamps</Typography>
+              <Divider sx={{ my: 1 }} />
 
-          {trip.actualDistance !== undefined && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body1"><strong>Actual Distance:</strong></Typography>
-              <Typography variant="body1">{trip.actualDistance} km</Typography>
-            </Box>
-          )}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="body1"><strong>Created At:</strong></Typography>
+                <Typography variant="body1">{new Date(trip.createdAt).toLocaleString()}</Typography>
+              </Box>
 
-          {trip.fuelConsumed !== undefined && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body1"><strong>Fuel Consumed:</strong></Typography>
-              <Typography variant="body1">{trip.fuelConsumed} L</Typography>
-            </Box>
-          )}
-        </Stack>
+              {trip.startedAt && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body1"><strong>Started At:</strong></Typography>
+                  <Typography variant="body1">{new Date(trip.startedAt).toLocaleString()}</Typography>
+                </Box>
+              )}
 
-        <Divider sx={{ my: 3 }} />
+              {trip.endedAt && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body1"><strong>Ended At:</strong></Typography>
+                  <Typography variant="body1">{new Date(trip.endedAt).toLocaleString()}</Typography>
+                </Box>
+              )}
+            </Stack>
 
-        {/* Timestamps */}
-        <Stack spacing={2}>
-          <Typography variant="h6">Timestamps</Typography>
-          <Divider sx={{ my: 1 }} />
+            <Divider sx={{ my: 3 }} />
 
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body1"><strong>Created At:</strong></Typography>
-            <Typography variant="body1">{new Date(trip.createdAt).toLocaleString()}</Typography>
-          </Box>
-
-          {trip.startedAt && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body1"><strong>Started At:</strong></Typography>
-              <Typography variant="body1">{new Date(trip.startedAt).toLocaleString()}</Typography>
-            </Box>
-          )}
-
-          {trip.endedAt && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body1"><strong>Ended At:</strong></Typography>
-              <Typography variant="body1">{new Date(trip.endedAt).toLocaleString()}</Typography>
-            </Box>
-          )}
-        </Stack>
-
-        <Divider sx={{ my: 3 }} />
-
-        {/* Action Buttons */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-          {trip.status === 'draft' && (
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => navigate(`/trips/${trip.id}/edit`)}
-            >
-              Edit Trip
-            </Button>
-          )}
-
-          {/* Action buttons with role-based access control */}
-          {user?.role?.code === 'admin' || user?.role?.code === 'fleet_manager' && (
-            <>
+            {/* Action Buttons */}
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               {trip.status === 'draft' && (
                 <Button
-                  variant="outlined"
-                  onClick={() => {
-                    // In a real app, this would open a dispatch confirmation modal
-                    // For now, we'll just call the dispatch API directly
-                    tripService.dispatchTrip(trip.id).then(() => {
-                      window.location.reload();
-                    });
-                  }}
-                >
-                  Dispatch Trip
-                </Button>
-              )}
-
-              {trip.status === 'dispatched' && (
-                <Button
                   variant="contained"
-                  color="success"
-                  onClick={() => setIsCompletedDialogOpen(true)}
+                  color="primary"
+                  onClick={() => navigate(`/trips/${trip.id}/edit`)}
                 >
-                  Complete Trip
+                  Edit Trip
                 </Button>
               )}
 
-              {(trip.status === 'draft' || trip.status === 'dispatched') && (
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={handleCancelTrip}
-                >
-                  Cancel Trip
-                </Button>
+              {/* Action buttons with role-based access control */}
+              {(user?.role === 'admin' || user?.role === 'fleet_manager') && (
+                <>
+                  {trip.status === 'draft' && (
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        tripService.dispatchTrip(trip.id).then(() => {
+                          window.location.reload();
+                        });
+                      }}
+                    >
+                      Dispatch Trip
+                    </Button>
+                  )}
+
+                  {trip.status === 'dispatched' && (
+                    <Button
+                      variant="contained"
+                      color="success"
+                      onClick={() => setIsCompletedDialogOpen(true)}
+                    >
+                      Complete Trip
+                    </Button>
+                  )}
+
+                  {(trip.status === 'draft' || trip.status === 'dispatched') && (
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      onClick={handleCancelTrip}
+                    >
+                      Cancel Trip
+                    </Button>
+                  )}
+
+                  {trip.status !== 'completed' && (
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      onClick={() => {
+                        if (window.confirm('Are you sure you want to delete this trip? This action cannot be undone.')) {
+                          tripService.deleteTrip(trip.id).then(() => {
+                            navigate('/trips');
+                          });
+                        }
+                      }}
+                    >
+                      Delete Trip
+                    </Button>
+                  )}
+                </>
               )}
 
-              {trip.status !== 'completed' && (
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={() => {
-                    // In a real app, this would open a delete confirmation modal
-                    // For now, we'll just call the delete API directly
-                    if (window.confirm('Are you sure you want to delete this trip? This action cannot be undone.')) {
-                      tripService.deleteTrip(trip.id).then(() => {
-                        navigate('/trips');
-                      });
-                    }
-                  }}
-                >
-                  Delete Trip
-                </Button>
-              )
-            </>
-          )}
+              {/* Driver-specific actions */}
+              {user?.role === 'driver' && (
+                <>
+                  {/* Drivers can only dispatch/complete/cancel trips assigned to them */}
+                  {trip.driverId === user?.id && trip.status === 'draft' && (
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        tripService.dispatchTrip(trip.id).then(() => {
+                          window.location.reload();
+                        });
+                      }}
+                    >
+                      Dispatch Trip
+                    </Button>
+                  )}
 
-          {/* Driver-specific actions */}
-          {user?.role?.code === 'driver' && (
-            <>
-              {/* Drivers can only dispatch/complete/cancel trips assigned to them */}
-              {trip.driverId === user?.id && trip.status === 'draft' && (
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    // In a real app, this would open a dispatch confirmation modal
-                    // For now, we'll just call the dispatch API directly
-                    tripService.dispatchTrip(trip.id).then(() => {
-                      window.location.reload();
-                    });
-                  }}
-                >
-                  Dispatch Trip
-                </Button>
+                  {trip.driverId === user?.id && trip.status === 'dispatched' && (
+                    <Button
+                      variant="contained"
+                      color="success"
+                      onClick={() => setIsCompletedDialogOpen(true)}
+                    >
+                      Complete Trip
+                    </Button>
+                  )}
+
+                  {trip.driverId === user?.id && (trip.status === 'draft' || trip.status === 'dispatched') && (
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      onClick={handleCancelTrip}
+                    >
+                      Cancel Trip
+                    </Button>
+                  )}
+                </>
               )}
 
-              {trip.driverId === user?.id && trip.status === 'dispatched' && (
-                <Button
-                  variant="contained"
-                  color="success"
-                  onClick={() => setIsCompletedDialogOpen(true)}
-                >
-                  Complete Trip
-                </Button>
-              )}
+              <Button
+                variant="outlined"
+                onClick={() => navigate('/trips')}
+              >
+                Back to List
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Container>
 
-              {trip.driverId === user?.id && (trip.status === 'draft' || trip.status === 'dispatched') && (
-                <Button
-                  variant="outlined"
-                  color="error"
-                  onClick={handleCancelTrip}
-                >
-                  Cancel Trip
-                </Button>
-              )}
-            </>
-          )}
-
-          {/* View-only roles (safety_officer, financial_analyst, employee) get no action buttons */}}
-
+      {/* Complete Trip Dialog */}
+      <Dialog
+        open={isCompletedDialogOpen}
+        onClose={() => setIsCompletedDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Complete Trip</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Actual Distance (km)"
+            type="number"
+            slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
+            value={actualDistance}
+            onChange={(e) => setActualDistance(e.target.value)}
+            required
+            error={actualDistance === '' || parseFloat(actualDistance) < 0}
+            helperText={actualDistance === '' || parseFloat(actualDistance) < 0 ? 'Please enter a valid distance' : ''}
+            fullWidth
+            sx={{ mt: 2 }}
+          />
+          <TextField
+            label="Fuel Consumed (L)"
+            type="number"
+            slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
+            value={fuelConsumed}
+            onChange={(e) => setFuelConsumed(e.target.value)}
+            required
+            error={fuelConsumed === '' || parseFloat(fuelConsumed) < 0}
+            helperText={fuelConsumed === '' || parseFloat(fuelConsumed) < 0 ? 'Please enter a valid fuel amount' : ''}
+            fullWidth
+            sx={{ mt: 2 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsCompletedDialogOpen(false)}>Cancel</Button>
           <Button
-            variant="outlined"
-            onClick={() => navigate('/trips')}
+            variant="contained"
+            color="success"
+            onClick={handleCompleteTrip}
+            disabled={actualDistance === '' || parseFloat(actualDistance) < 0 || fuelConsumed === '' || parseFloat(fuelConsumed) < 0}
           >
-            Back to List
+            Complete Trip
           </Button>
-        </Stack>
-      </CardContent>
-    </Container>
-
-    {/* Complete Trip Dialog */}
-    <Dialog
-      open={isCompletedDialogOpen}
-      onClose={() => setIsCompletedDialogOpen(false)}
-      maxWidth="sm"
-      fullWidth
-    >
-      <DialogTitle>Complete Trip</DialogTitle>
-      <DialogContent>
-        <TextField
-          label="Actual Distance (km)"
-          type="number"
-          inputProps={{ min: 0, step: 0.1 }}
-          value={actualDistance}
-          onChange={(e) => setActualDistance(e.target.value)}
-          required
-          error={actualDistance === '' || parseFloat(actualDistance) < 0}
-          helperText={actualDistance === '' || parseFloat(actualDistance) < 0 ? 'Please enter a valid distance' : ''}
-          fullWidth
-        />
-        <TextField
-          label="Fuel Consumed (L)"
-          type="number"
-          inputProps={{ min: 0, step: 0.1 }}
-          value={fuelConsumed}
-          onChange={(e) => setFuelConsumed(e.target.value)}
-          required
-          error={fuelConsumed === '' || parseFloat(fuelConsumed) < 0}
-          helperText={fuelConsumed === '' || parseFloat(fuelConsumed) < 0 ? 'Please enter a valid fuel amount' : ''}
-          fullWidth
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setIsCompletedDialogOpen(false)}>Cancel</Button>
-        <Button
-          variant="contained"
-          color="success"
-          onClick={handleCompleteTrip}
-          disabled={actualDistance === '' || parseFloat(actualDistance) < 0 || fuelConsumed === '' || parseFloat(fuelConsumed) < 0}
-        >
-          Complete Trip
-        </Button>
-      </DialogActions>
-    </Dialog>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
 

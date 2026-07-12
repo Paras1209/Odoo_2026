@@ -1,12 +1,13 @@
 export type UserRole =
   | 'admin'
   | 'fleet_manager'
+  | 'dispatcher'
   | 'driver'
   | 'safety_officer'
   | 'financial_analyst'
   | 'employee';
 
-export type UserStatus = 'active' | 'inactive' | 'suspended';
+export type UserStatus = 'active' | 'inactive' | 'suspended' | 'pending';
 
 export interface User {
   id: string;
@@ -39,7 +40,6 @@ export interface RegisterData {
   name: string;
   email: string;
   password: string;
-  role?: UserRole;
 }
 
 export interface ProfileUpdateData {

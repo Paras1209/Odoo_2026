@@ -7,34 +7,25 @@ import {
   Chip,
   CircularProgress,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Divider,
   IconButton,
-  InputLabel,
+  Menu as MuiMenu,
   MenuItem,
   Select,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Toolbar,
+  Tooltip,
   Typography,
-  useTheme,
+  type SelectChangeEvent,
 } from '@mui/material';
-import Menu from '../../components/Menu';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CalendarToday, Delete, Edit, LocationOn, Refresh, DirectionsCar, Person, Scale, LocalDrink, MoreVert } from '@mui/icons/material';
+import { useNavigate } from 'react-router-dom';
+import { MoreVert, Refresh } from '@mui/icons-material';
 import tripService from '../../services/tripService';
 import { Trip, TripFilters } from '../../types/trip';
-import { SnackbarProvider, useSnackbar } from 'notistack';
+import { useSnackbar } from 'notistack';
+import { useAuth } from '../../contexts/AuthContext';
 import DispatchConfirmationModal from '../../components/modals/DispatchConfirmationModal';
 import CompleteTripModal from '../../components/modals/CompleteTripModal';
 import CancelTripModal from '../../components/modals/CancelTripModal';
@@ -52,12 +43,11 @@ const TripList: React.FC = () => {
   const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
 
   const { page = 1, limit = 10, source, destination, vehicleType, status, startDate, endDate } = filters;
 
   // Modify filters for driver role to only show their own trips
-  const driverFilters = user?.role?.code === 'driver'
+  const driverFilters = user?.role === 'driver'
     ? { ...filters, driverId: user.id }
     : filters;
 
@@ -66,14 +56,12 @@ const TripList: React.FC = () => {
     isLoading,
     error,
     refetch
-  } = useQuery<{ success: boolean; data: Trip[]; count: number }, Error>(
-    ['trips', { page, limit, source, destination, vehicleType, status, startDate, endDate }, user?.role?.code === 'driver' ? user.id : null],
-    () => tripService.getTrips({ ...driverFilters, page, limit }),
-    {
-      refetchOnWindowFocus: false,
-      retry: false,
-    }
-  );
+  } = useQuery<{ success: boolean; data: Trip[]; count: number }, Error>({
+    queryKey: ['trips', { page, limit, source, destination, vehicleType, status, startDate, endDate }, user?.role === 'driver' ? user.id : null],
+    queryFn: () => tripService.getTrips({ ...driverFilters, page, limit }),
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
 
   const handleFilterChange = (field: keyof TripFilters, value: string | number | undefined) => {
     setFilters(prev => ({
@@ -103,20 +91,6 @@ const TripList: React.FC = () => {
     setSelectedTrip(null);
   };
 
-  const handleDeleteTrip = async () => {
-    if (!selectedTripId) return;
-
-    try {
-      await tripService.deleteTrip(selectedTripId);
-      await queryClient.invalidateQueries({ queryKey: ['trips'] });
-      enqueueSnackbar('Trip deleted successfully', { variant: 'success' });
-    } catch (err: any) {
-      enqueueSnackbar(err.response?.data?.error?.message || 'Failed to delete trip', { variant: 'error' });
-    } finally {
-      handleCloseMenu();
-    }
-  };
-
   const handleDispatchTrip = async () => {
     if (!selectedTrip) return;
 
@@ -143,7 +117,7 @@ const TripList: React.FC = () => {
     }
   };
 
-  const handleCancelTrip = async (reason: string) => {
+  const handleCancelTrip = async () => {
     if (!selectedTripId) return;
 
     try {
@@ -198,215 +172,206 @@ const TripList: React.FC = () => {
   const totalCount = tripsData?.count || 0;
 
   return (
-    <>
-      <SnackbarProvider maxSnack={3}>
-        <Container sx={{ py: 4 }}>
-          <Toolbar>
-            <Typography variant="h6" flexGrow={1}>
-              Trip Management
-            </Typography>
-            <Button variant="contained" color="primary" sx={{ ml: 2 }} onClick={() => navigate('/trips/new')}>
-              New Trip
+    <Container sx={{ py: 4 }}>
+      <Toolbar>
+        <Typography variant="h6" flexGrow={1}>
+          Trip Management
+        </Typography>
+        <Button variant="contained" color="primary" sx={{ ml: 2 }} onClick={() => navigate('/trips/new')}>
+          New Trip
+        </Button>
+      </Toolbar>
+
+      {/* Filters */}
+      <Card sx={{ mt: 3, mb: 2 }}>
+        <CardContent>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField
+              label="Source"
+              value={source || ''}
+              onChange={(e) => handleFilterChange('source', e.target.value)}
+              sx={{ flex: 1 }}
+            />
+            <TextField
+              label="Destination"
+              value={destination || ''}
+              onChange={(e) => handleFilterChange('destination', e.target.value)}
+              sx={{ flex: 1 }}
+            />
+            <Select
+              label="Status"
+              value={status || ''}
+              onChange={(e) => handleFilterChange('status', e.target.value as string)}
+              sx={{ flex: 1 }}
+              MenuProps={{ sx: { width: 200 } }}
+            >
+              <MenuItem value="">All Statuses</MenuItem>
+              <MenuItem value="draft">Draft</MenuItem>
+              <MenuItem value="dispatched">Dispatched</MenuItem>
+              <MenuItem value="completed">Completed</MenuItem>
+              <MenuItem value="cancelled">Cancelled</MenuItem>
+            </Select>
+            <Button variant="outlined" onClick={() => {
+              setFilters({});
+              setFilters(prev => ({ ...prev, page: 1 }));
+            }}>
+              Clear Filters
             </Button>
-          </Toolbar>
+            <Button variant="contained" color="primary" onClick={() => refetch()}>
+              <Refresh fontSize="small" /> Filter
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
 
-          {/* Filters */}
-          <Card sx={{ mt: 3, mb: 2 }}>
-            <CardContent>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  label="Source"
-                  value={source || ''}
-                  onChange={(e) => handleFilterChange('source', e.target.value)}
-                  sx={{ flex: 1 }}
-                />
-                <TextField
-                  label="Destination"
-                  value={destination || ''}
-                  onChange={(e) => handleFilterChange('destination', e.target.value)}
-                  sx={{ flex: 1 }}
-                />
-                <Select
-                  label="Status"
-                  value={status || ''}
-                  onChange={(e) => handleFilterChange('status', e.target.value as string)}
-                  sx={{ flex: 1 }}
-                  MenuProps={{ sx: { width: 200 } }}
-                >
-                  <MenuItem value="">All Statuses</MenuItem>
-                  <MenuItem value="draft">Draft</MenuItem>
-                  <MenuItem value="dispatched">Dispatched</MenuItem>
-                  <MenuItem value="completed">Completed</MenuItem>
-                  <MenuItem value="cancelled">Cancelled</MenuItem>
-                </Select>
-                <Button variant="outlined" onClick={() => {
-                  setFilters({});
-                  setFilters(prev => ({ ...prev, page: 1 }));
-                }}>
-                  Clear Filters
-                </Button>
-                <Button variant="contained" color="primary" onClick={() => refetch()}>
-                  <RefreshIcon fontSize="small" /> Filter
-                </Button>
-              </Stack>
-            </CardContent>
-          </Card>
-
-          {/* Trips Table */}
-          {trips.length > 0 ? (
-            <Box sx={{ mt: 2 }}>
-              <TableContainer>
-                <Table sx={{ minWidth: 650 }}>
-                  <thead>
-                    <tr>
-                      <th>Source → Destination</th>
-                      <th>Vehicle</th>
-                      <th>Driver</th>
-                      <th>Cargo (kg)</th>
-                      <th>Distance (km)</th>
-                      <th>Status</th>
-                      <th>Created</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trips.map((trip) => (
-                      <tr key={trip.id}>
-                        <td>
+      {/* Trips Table */}
+      {trips.length > 0 ? (
+        <Box sx={{ mt: 2 }}>
+          <Box sx={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '650px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600 }}>Source → Destination</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600 }}>Vehicle</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600 }}>Driver</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600 }}>Cargo (kg)</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600 }}>Distance (km)</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600 }}>Status</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600 }}>Created</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: 600 }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trips.map((trip: Trip) => (
+                  <tr key={trip.id} style={{ borderBottom: '1px solid #ddd' }}>
+                    <td style={{ padding: '12px' }}>
+                      <Typography variant="body2">
+                        {trip.source} → {trip.destination}
+                      </Typography>
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      {trip.vehicle ? (
+                        <>
+                          <Typography variant="body2" color="text.secondary">
+                            {trip.vehicle.registrationNumber}
+                          </Typography>
                           <Typography variant="body2">
-                            {trip.source} → {trip.destination}
+                            {trip.vehicle.name} ({trip.vehicle.type})
                           </Typography>
-                        </td>
-                        <td>
-                          {trip.vehicle ? (
-                            <>
-                              <Typography variant="body2" color="text.secondary">
-                                {trip.vehicle.registrationNumber}
-                              </Typography>
-                              <Typography variant="body2">
-                                {trip.vehicle.name} ({trip.vehicle.type})
-                              </Typography>
-                            </>
-                          ) : (
-                            <Typography variant="body2">N/A</Typography>
-                          )}
-                        </td>
-                        <td>
-                          {trip.driver ? (
-                            <>
-                              <Typography variant="body2" color="text.secondary">
-                                {trip.driver.licenseNumber}
-                              </Typography>
-                              <Typography variant="body2">
-                                {trip.driver.name}
-                              </Typography>
-                            </>
-                          ) : (
-                            <Typography variant="body2">N/A</Typography>
-                          )}
-                        </td>
-                        <td>{trip.cargoWeight}</td>
-                        <td>{trip.plannedDistance}{trip.actualDistance ? ` (${trip.actualDistance} actual)` : ''}</td>
-                        <td>
-                          <Chip
-                            label={trip.status.charAt(0).toUpperCase() + trip.status.slice(1)}
-                            size="small"
-                            sx={{
-                              backgroundColor:
-                                trip.status === 'draft'
-                                  ? 'grey.100'
-                                  : trip.status === 'dispatched'
-                                  ? 'blue.100'
-                                  : trip.status === 'completed'
-                                  ? 'green.100'
-                                  : 'red.100',
-                              color:
-                                trip.status === 'draft'
-                                  ? 'grey.800'
-                                  : trip.status === 'dispatched'
-                                  ? 'blue.800'
-                                  : trip.status === 'completed'
-                                  ? 'green.800'
-                                  : 'red.800',
-                            }}
-                          />
-                        </td>
-                        <td>
-                          <Typography variant="caption">
-                            {new Date(trip.createdAt).toLocaleDateString()}
+                        </>
+                      ) : (
+                        <Typography variant="body2">N/A</Typography>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      {trip.driver ? (
+                        <>
+                          <Typography variant="body2" color="text.secondary">
+                            {trip.driver.licenseNumber}
                           </Typography>
-                        </td>
-                        <td>
-                          <IconButton
-                            aria-label="Trip actions"
-                            size="small"
-                            onClick={(e) => handleOpenMenu(e, trip.id)}
-                          >
-                            <Tooltip title="Actions">
-                              <MoreVert />
-                            </Tooltip>
-                          </IconButton>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </TableContainer>
+                          <Typography variant="body2">
+                            {trip.driver.name}
+                          </Typography>
+                        </>
+                      ) : (
+                        <Typography variant="body2">N/A</Typography>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px' }}>{trip.cargoWeight}</td>
+                    <td style={{ padding: '12px' }}>{trip.plannedDistance}{trip.actualDistance ? ` (${trip.actualDistance} actual)` : ''}</td>
+                    <td style={{ padding: '12px' }}>
+                      <Chip
+                        label={trip.status.charAt(0).toUpperCase() + trip.status.slice(1)}
+                        size="small"
+                        sx={{
+                          backgroundColor:
+                            trip.status === 'draft'
+                              ? 'grey.100'
+                              : trip.status === 'dispatched'
+                              ? 'blue.100'
+                              : trip.status === 'completed'
+                              ? 'green.100'
+                              : 'red.100',
+                          color:
+                            trip.status === 'draft'
+                              ? 'grey.800'
+                              : trip.status === 'dispatched'
+                              ? 'blue.800'
+                              : trip.status === 'completed'
+                              ? 'green.800'
+                              : 'red.800',
+                        }}
+                      />
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <Typography variant="caption">
+                        {new Date(trip.createdAt).toLocaleDateString()}
+                      </Typography>
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <Tooltip title="Actions">
+                        <IconButton
+                          aria-label="Trip actions"
+                          size="small"
+                          onClick={(e) => handleOpenMenu(e, trip.id)}
+                        >
+                          <MoreVert />
+                        </IconButton>
+                      </Tooltip>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Box>
 
-              {/* Pagination */}
-              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="body2">
-                  Showing {trips.length} of {totalCount} trips
-                </Typography>
-                <Stack direction="row" spacing={2}>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    disabled={page <= 1}
-                    onClick={() => handlePageChange(page - 1)}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    disabled={page >= Math.ceil(totalCount / limit)}
-                    onClick={() => handlePageChange(page + 1)}
-                  >
-                    Next
-                  </Button>
-                  <Select
-                    label="Rows per page"
-                    value={limit}
-                    onChange={(e) => handleLimitChange(parseInt(e.target.value as string))}
-                    labelWidth={0}
-                    select={{ menuIcon: () => <MoreVertIcon /> }}
-                  >
-                    {[10, 25, 50, 100].map((val) => (
-                      <MenuItem key={val} value={val}>
-                        {val}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </Stack>
-              </Box>
-            </Box>
-          ) : (
-            <Box sx={{ mt: 4, textAlign: 'center', py: 8 }}>
-              <Typography variant="h6">No trips found</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Try adjusting your filters or create your first trip
-              </Typography>
-              <Button variant="contained" color="primary" sx={{ mt: 2 }} onClick={() => navigate('/trips/new')}>
-                Create First Trip
+          {/* Pagination */}
+          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="body2">
+              Showing {trips.length} of {totalCount} trips
+            </Typography>
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={page <= 1}
+                onClick={() => handlePageChange(page - 1)}
+              >
+                Previous
               </Button>
-            </Box>
-          )}
-        </Container>
-      </SnackbarProvider>
-
-      {/* Action Menu */}
-      <div
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={page >= Math.ceil(totalCount / limit)}
+                onClick={() => handlePageChange(page + 1)}
+              >
+                Next
+              </Button>
+              <Select
+                value={limit}
+                onChange={(e: SelectChangeEvent<number>) => handleLimitChange(Number(e.target.value))}
+              >
+                {[10, 25, 50, 100].map((val) => (
+                  <MenuItem key={val} value={val}>
+                    {val}
+                  </MenuItem>
+                ))}
+              </Select>
+            </Stack>
+          </Box>
+        </Box>
+      ) : (
+        <Box sx={{ mt: 4, textAlign: 'center', py: 8 }}>
+          <Typography variant="h6">No trips found</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Try adjusting your filters or create your first trip
+          </Typography>
+          <Button variant="contained" color="primary" sx={{ mt: 2 }} onClick={() => navigate('/trips/new')}>
+            Create First Trip
+          </Button>
+        </Box>
+      )}      {/* Action Menu */}
+      <MuiMenu
         anchorEl={anchorEl}
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
@@ -429,7 +394,7 @@ const TripList: React.FC = () => {
             </MenuItem>
             <Divider />
             {/* Role-based access control for actions */}
-            {user?.role?.code === 'admin' || user?.role?.code === 'fleet_manager' ? (
+            {user?.role === 'admin' || user?.role === 'fleet_manager' ? (
               <>
                 {selectedTrip && selectedTrip.status === 'draft' && (
                   <MenuItem onClick={() => {
@@ -462,7 +427,7 @@ const TripList: React.FC = () => {
             ) : (
               <>
                 {/* View-only roles (driver, safety_officer, financial_analyst, employee) */}
-                {user?.role?.code === 'driver' && (
+                {user?.role === 'driver' && (
                   <>
                     {/* Drivers can only view/edit trips assigned to them */}
                     {selectedTrip && selectedTrip.driverId === user?.id && (
@@ -498,19 +463,19 @@ const TripList: React.FC = () => {
                     )}
                   </>
                 )}
-                {user?.role?.code === 'safety_officer' && (
+                {user?.role === 'safety_officer' && (
                   <>
                     {/* Safety officers can view all trips but cannot modify */}
                     {/* No action buttons for safety officers */}
                   </>
                 )}
-                {user?.role?.code === 'financial_analyst' && (
+                {user?.role === 'financial_analyst' && (
                   <>
                     {/* Financial analysts can view all trips but cannot modify */}
                     {/* No action buttons for financial analysts */}
                   </>
                 )}
-                {user?.role?.code === 'employee' && (
+                {user?.role === 'employee' && (
                   <>
                     {/* Employees can view all trips but cannot modify */}
                     {/* No action buttons for employees */}
@@ -519,7 +484,7 @@ const TripList: React.FC = () => {
               </>
             )}
             <Divider />
-            {user?.role?.code === 'admin' || user?.role?.code === 'fleet_manager' || (user?.role?.code === 'driver' && selectedTrip && selectedTrip.driverId === user?.id) ? (
+            {user?.role === 'admin' || user?.role === 'fleet_manager' || (user?.role === 'driver' && selectedTrip && selectedTrip.driverId === user?.id) ? (
               <MenuItem onClick={() => {
                 if (selectedTripId) {
                   // In a real app, this would open a delete confirmation modal
@@ -539,20 +504,29 @@ const TripList: React.FC = () => {
             ) : null}
           </>
         )}
-      </div>
+      </MuiMenu>
 
       {/* Dispatch Confirmation Modal */}
-      <DispatchConfirmationModal
-        open={dispatchModalOpen}
-        onClose={() => setDispatchModalOpen(false)}
-        onConfirm={handleDispatchTrip}
-        trip={selectedTrip || {
-          source: '',
-          destination: '',
-          vehicle: { registrationNumber: '', name: '', type: '' },
-          driver: { name: '', licenseNumber: '' }
-        }}
-      />
+      {selectedTrip && (
+        <DispatchConfirmationModal
+          open={dispatchModalOpen}
+          onClose={() => setDispatchModalOpen(false)}
+          onConfirm={handleDispatchTrip}
+          trip={{
+            source: selectedTrip.source,
+            destination: selectedTrip.destination,
+            vehicle: {
+              registrationNumber: selectedTrip.vehicle?.registrationNumber || '',
+              name: selectedTrip.vehicle?.name || '',
+              type: selectedTrip.vehicle?.type || '',
+            },
+            driver: {
+              name: selectedTrip.driver?.name || '',
+              licenseNumber: selectedTrip.driver?.licenseNumber || '',
+            },
+          }}
+        />
+      )}
 
       {/* Complete Trip Modal */}
       <CompleteTripModal
@@ -567,7 +541,7 @@ const TripList: React.FC = () => {
         onClose={() => setCancelModalOpen(false)}
         onConfirm={handleCancelTrip}
       />
-    </>
+    </Container>
   );
 };
 

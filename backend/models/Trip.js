@@ -1,4 +1,4 @@
-const { DataTypes, Sequelize } = require('sequelize');
+﻿const { DataTypes, Sequelize } = require('sequelize');
 const sequelize = require('../config/database').sequelize;
 const Vehicle = require('./Vehicle');
 const Driver = require('./Driver');
@@ -104,12 +104,6 @@ const Trip = sequelize.define('Trip', {
       fields: ['driverId', 'status']
     }
   ]
-});
-
-// Model-level validations
-Trip.addValidator('cargoWeightNotExceedCapacity', function(value) {
-  // This validation will be implemented in the instance method since it requires fetching the vehicle
-  return true; // Placeholder - actual validation in instance method
 });
 
 // Instance methods
@@ -239,13 +233,7 @@ Trip.prototype.cancel = async function() {
 // Associations
 Trip.associate = (models) => {
   Trip.belongsTo(models.Vehicle, { foreignKey: 'vehicleId', as: 'vehicle' });
-  Trip.belongsTo(models.Driver, { foreignKey: 'driverId', as: 'driver' );
+  Trip.belongsTo(models.Driver, { foreignKey: 'driverId', as: 'driver' });
 };
-
-module.exports = Trip;
-
-// Associations
-Trip.belongsTo(Vehicle, { foreignKey: 'vehicleId', as: 'vehicle' });
-Trip.belongsTo(Driver, { foreignKey: 'driverId', as: 'driver' });
 
 module.exports = Trip;

@@ -52,11 +52,39 @@ export default function App() {
                     <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
                     <Route path="/" element={<RequireAuth><Profile /></RequireAuth>} />
 
-                    {/* Trip Management Routes */}
-                    <Route path="/trips" element={<RequireAuth><TripList /></RequireAuth>} />
-                    <Route path="/trips/new" element={<RequireAuth><TripForm /></RequireAuth>} />
-                    <Route path="/trips/:id" element={<RequireAuth><TripDetail /></RequireAuth>} />
-                    <Route path="/trips/:id/edit" element={<RequireAuth><TripForm /></RequireAuth>} />
+                    {/* Trip Management Routes - Accessible by Dispatcher, Fleet Manager, Admin */}
+                    <Route 
+                      path="/trips" 
+                      element={
+                        <RequireAuth roles={['dispatcher', 'fleet_manager', 'admin']}>
+                          <TripList />
+                        </RequireAuth>
+                      } 
+                    />
+                    <Route 
+                      path="/trips/new" 
+                      element={
+                        <RequireAuth roles={['dispatcher', 'admin']}>
+                          <TripForm />
+                        </RequireAuth>
+                      } 
+                    />
+                    <Route 
+                      path="/trips/:id" 
+                      element={
+                        <RequireAuth roles={['dispatcher', 'fleet_manager', 'driver', 'admin']}>
+                          <TripDetail />
+                        </RequireAuth>
+                      } 
+                    />
+                    <Route 
+                      path="/trips/:id/edit" 
+                      element={
+                        <RequireAuth roles={['dispatcher', 'admin']}>
+                          <TripForm />
+                        </RequireAuth>
+                      } 
+                    />
 
                     {/* 404 */}
                     <Route

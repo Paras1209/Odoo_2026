@@ -29,9 +29,19 @@ const protect = asyncHandler(async (req, res, next) => {
       }
 
       // Check if user is active
-      if (req.user.status !== 'active') {
+      if (req.user.status === 'suspended') {
+        res.status(401);
+        throw new Error('User account is suspended');
+      }
+
+      if (req.user.status === 'inactive') {
         res.status(401);
         throw new Error('User account is deactivated');
+      }
+
+      if (req.user.status === 'pending') {
+        res.status(403);
+        throw new Error('Account pending admin approval. Please wait for activation.');
       }
 
       next();

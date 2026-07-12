@@ -144,7 +144,7 @@ const createTrip = asyncHandler(async (req, res) => {
 // @desc    Update trip
 // @route   PUT /api/v1/trips/:id
 // @access  Private
-const updateTrip = asyncHandler(async (req, res) {
+const updateTrip = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { source, destination, vehicleId, driverId, cargoWeight, plannedDistance } = req.body;
 
